@@ -1,13 +1,30 @@
-#include 
+#include <torch/all.h>
+#include <torch/python.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <cuda_runtime.h>
+#include<iostream>
+//目的是观察torch中type为half的数据变为void*后数据读取的变化
 
 
-def run_problem(self, m, n, k, thread_k, thread_n, groupsize=-1):
-        print('% 5d % 6d % 6d % 4d % 4d % 4d' % (m, n, k, thread_k, thread_n, groupsize))
-        A = torch.randn((m, k), dtype=torch.half, device=DEV)
-        B_ref, B, s = gen_quant3(k, n, groupsize=groupsize)
-        C = torch.zeros((m, n), dtype=torch.half, device=DEV)
-        C_ref = torch.matmul(A, B_ref)
-        workspace = torch.zeros(n // 128 * 16, device=DEV)
-        marlin.mul_3bit(A, B, C, s, workspace, thread_k, thread_n, -1)
-        torch.cuda.synchronize()
-        self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
+int main(){
+        int m = 4;
+        int k = 4;
+        auto A = torch.ones((m, k), dtype=torch.half);
+        auto A1 = A.data_ptr();
+
+        const int* A1_ptr = (const int*) A1;
+
+        std::cout << A[0] << " " << A1_ptr[0] << " " std::endl;
+        return 0;
+
+}
+
+
+
+
+
+
+
+
+
+

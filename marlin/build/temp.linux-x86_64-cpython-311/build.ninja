@@ -23,9 +23,9 @@ rule cuda_compile
 
 
 
-build /u/zshao3/int3_marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_3bit_cuda_kernel.o: cuda_compile /u/zshao3/int3_marlin/marlin/marlin/marlin_3bit_cuda_kernel.cu
-build /u/zshao3/int3_marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda.o: compile /u/zshao3/int3_marlin/marlin/marlin/marlin_cuda.cpp
-build /u/zshao3/int3_marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda_kernel.o: cuda_compile /u/zshao3/int3_marlin/marlin/marlin/marlin_cuda_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_3bit_cuda_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_cuda_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda.o: compile /u/zshao3/int3marlin/marlin/marlin/marlin_cuda.cpp
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_cuda_kernel.cu
 
 
 

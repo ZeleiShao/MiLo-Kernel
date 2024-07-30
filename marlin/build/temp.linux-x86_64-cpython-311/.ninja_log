@@ -1,4 +1,4 @@
 # ninja log v5
-3	15090	1722014120616653421	/u/zshao3/int3_marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_3bit_cuda_kernel.o	1d76c6e738ff3b14
-4	15097	1722014120639030105	/u/zshao3/int3_marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda_kernel.o	8ca643969d30c2e2
-4	92457	1722014197991098066	/u/zshao3/int3_marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda.o	c273e49658ac9276
+3	15646	1722320824731576992	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_3bit_cuda_kernel.o	54f1b78cdc8c5aff
+4	15651	1722320824733101336	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda_kernel.o	f5e02e557ad1a655
+4	200223	1722321009302399945	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-311/marlin/marlin_cuda.o	a117c1e05cc611ef

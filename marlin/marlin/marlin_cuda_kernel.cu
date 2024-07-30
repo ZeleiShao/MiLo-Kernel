@@ -588,7 +588,10 @@ __global__ void Marlin(
     auto write = [&] (int idx, float c0, float c1, FragS& s) {
       half2 res = __halves2half2(__float2half(c0), __float2half(c1));
       if (group_blocks == -1) // for per-column quantization we finally apply the scale here
+      {
         res = __hmul2(res, s[0]);
+      }
+        
       ((half2*) sh)[idx] = res;
     };
     if (threadIdx.x / 32 < thread_n_blocks / 4) {

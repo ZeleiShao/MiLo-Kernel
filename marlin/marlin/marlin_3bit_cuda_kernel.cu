@@ -23,7 +23,7 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <iostream>
-//#include <stdio.h>
+#include <stdio.h>
 
 
 constexpr int ceildiv(int a, int b) {
@@ -172,9 +172,8 @@ __device__ inline FragB_8 dequant(unsigned int q1,unsigned int q2,unsigned int q
   rtn[3][1] = deq2[(q2 >> 6) & 0x3f][off];
   rtn[4][0] = deq2[(q2 >> 12) & 0x3f][off];
   rtn[4][1] = deq2[(q2 >> 18) & 0x3f][off];
-  tmp = ((q2 >> 24) & 0x3f) | ((q3 << 4) & 0x30);
+  tmp = ((q2 >> 24) & 0x3f) | ((q3 << 4) & 0x30); 
   rtn[5][0] = deq2[tmp][off];
-  rtn[5][0] = deq2[(q3 >> 0) & 0x3f][off];
   q3 >>= 2;
   rtn[5][1] = deq2[(q3 >> 0) & 0x3f][off];
   rtn[6][0] = deq2[(q3 >> 6) & 0x3f][off];
@@ -191,6 +190,7 @@ __device__ inline void scale(FragB& frag_b, FragS& frag_s, int i) {
   frag_b[1] = __hmul2(frag_b[1], s);
 }
 
+
 // Wait until barrier reaches `count`, then lock for current threadblock.
 __device__ inline void barrier_acquire(int* lock, int count) {
   if (threadIdx.x == 0) {
@@ -202,6 +202,7 @@ __device__ inline void barrier_acquire(int* lock, int count) {
   }
   __syncthreads();
 }
+
 
 // Release barrier and increment visitation count.
 __device__ inline void barrier_release(int* lock, bool reset = false) {
@@ -401,13 +402,11 @@ __global__ void Marlin_3bit(
   {
     B1_ptr[i] = B1 + b_gl_rd_delta_i * i + b_gl_rd;
     B2_ptr[i] = B2 + b_gl_rd_delta_i * i + b_gl_rd;
-    }
+  }
 
   extern __shared__ int4 sh[];
   // Shared memory storage for global fetch pipelines. 
   int4* sh_a = sh;
-  //I3* sh_b = reinterpret_cast<I3*>((sh_a + stages * a_sh_stage));
-  //int4* sh_s = reinterpret_cast<int4*>((sh_b + stages * b_sh_stage));
   int4* sh_s = sh_a + stages * a_sh_stage;
   I2* sh_b1 = reinterpret_cast<I2*>(sh_s + stages *s_sh_stage);
   int* sh_b2 = reinterpret_cast<int*>(sh_b1 + stages *b_sh_stage);
@@ -489,15 +488,23 @@ __global__ void Marlin_3bit(
   __shared__ half2 deq2[64][32];
   int val = threadIdx.x / 32;
   int off = threadIdx.x % 32;
+  half2 zero = __halves2half2(__int2half_ru(4),__int2half_ru(4));
   for (; val < 64; val += threads / 32) {
     deq2[val][off] = __halves2half2(
        __int2half_rn(val & 0x7), __int2half_rn(val >> 3)
     );
+    deq2[val][off] = __hsub2_rn(deq2[val][off],zero);
   }
 
   // Execute the actual tensor core matmul of a sub-tile. 
   auto matmul = [&] (int k) {
     // We have the m dimension as the inner loop in order to encourage overlapping dequantization and matmul operations.
+    /*if(blockIdx.x==0 & threadIdx.x == 0){
+        printf("frag_b1: %x\n", as_unsigned(frag_b1_quant[k % 2][0]));
+        printf("frag_b1: %x\n", as_unsigned(frag_b1_quant[k % 2][1]));
+        printf("frag_b2: %x\n", as_unsigned(frag_b2_quant[k % 2]));
+       }*/
+
     unsigned int b_quant_0 = as_unsigned(frag_b1_quant[k % 2][0]);
     unsigned int b_quant_1 = as_unsigned(frag_b1_quant[k % 2][1]);
     unsigned int b_quant_2 = as_unsigned(frag_b2_quant[k % 2]);
@@ -509,12 +516,13 @@ __global__ void Marlin_3bit(
         scale(frag_b[2*j], frag_s[k % 2][j], 0);
         scale(frag_b[2*j+1], frag_s[k % 2][j], 1);
       }
+
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
-       // if(threadIdx.x == 0){
-      //  printf("frag_b: %x\n", frag_b[2*j]);
-      //  printf("frag_b: %x\n", frag_b[2*j+1]);
-       // }
+       /*if(blockIdx.x==0 & threadIdx.x == 0){
+        printf("frag_b: %x\n", frag_b[2*j]);
+        printf("frag_b: %x\n", frag_b[2*j+1]);
+       }*/
         mma(frag_a[k % 2][i], frag_b[2*j], frag_c[i][j][0]);
         mma(frag_a[k % 2][i], frag_b[2*j+1], frag_c[i][j][1]);
       }
@@ -649,7 +657,11 @@ __global__ void Marlin_3bit(
     auto write = [&] (int idx, float c0, float c1, FragS& s) {
       half2 res = __halves2half2(__float2half(c0), __float2half(c1));
       if (group_blocks == -1) // for per-column quantization we finally apply the scale here
-        res = __hmul2(res, s[0]);
+        {
+          if (threadIdx.x == 0 & blockIdx.x == 0)
+            printf("s[0]=, %f",s[0]);
+          res = __hmul2(res, s[0]);
+        }
       ((half2*) sh)[idx] = res;
     };
     if (threadIdx.x / 32 < thread_n_blocks / 4) {
@@ -843,6 +855,9 @@ int marlin_cuda_3bit(
   const int4* A_ptr = (const int4*) A;
   const I2* B1_ptr = (const I2*) B1;
   const int* B2_ptr = (const int*) B2;
+
+  //printf("%d\n", *B2_ptr);
+
   int4* C_ptr = (int4*) C;
   const int4* s_ptr = (const int4*) s;
 
@@ -890,27 +905,31 @@ int marlin_cuda_3bit(
 #endif
 
 
-
+/*
 int main(){
+  printf("start");
   const int m = 16;
   const int k = 256;
   const int n = 256;
-  int A[m][k/2];
+
+  
+  int A[m][k];
   for(int i=0;i<m;++i){
     for(int j=0;j<k;++j){
         A[i][j] = 0;
     }
   }
+  printf("\nb");
   int B1[k/16][2*16*n/32];
   for(int i=0;i<k/16;++i){
     for(int j=0;j<2*16*n/32;++j){
-        B1[i][j] = 0;
+        B1[i][j] = -1;
     }
   }
   int B2[k/16][16*n/32];
   for(int i=0;i<k/16;++i){
     for(int j=0;j<n*16/32;++j){
-        B2[i][j] = 0;
+        B2[i][j] = -1;
     }
   }
   int C[n][k];
@@ -924,7 +943,7 @@ int main(){
     s[i] = 1;
   }
 
-
+  printf("\n afters");
   int workspace[n * 16];
   int res = marlin_cuda_3bit(
   A,
@@ -938,4 +957,4 @@ int main(){
   workspace);
   return res;
 }
-
+*/

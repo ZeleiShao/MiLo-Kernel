@@ -14,6 +14,64 @@ torch.random.manual_seed(seed)
 DEV = torch.device('cuda:0')
 
 
+def gen_quant4and3(m, n, groupsize=-1):
+    tile = 16
+    maxq4 = 2 ** 4 - 1
+    maxq3 = 2 ** 3 - 1
+    w = torch.ones((m, n), dtype=torch.half, device=DEV)
+    if groupsize != -1:
+        w = w.reshape((-1, groupsize, n))
+        w = w.permute(1, 0, 2)
+        w = w.reshape((groupsize, -1))
+    s = torch.max(torch.abs(w), 0, keepdim=True)[0]
+    s3 = s * 2 / maxq3
+    s4 = s * 2 / maxq4
+    w = torch.round(w / s).int()
+    w3 = w + (maxq3 + 1) // 2
+    w4 = w + (maxq4 + 1) // 2
+    w3 = torch.clamp(w3, 0, maxq3)
+    w4 = torch.clamp(w4, 0, maxq4)
+    ref4 = (w - (maxq4 + 1) // 2).half() * s
+    ref3 = (w - (maxq3 + 1) // 2).half() * s
+    if groupsize != -1:
+        def reshape(w):
+            w = w.reshape((groupsize, -1, n))
+            w = w.permute(1, 0, 2)
+            w = w.reshape((m, n)).contiguous()
+            return w
+        ref = reshape(ref)
+        w = reshape(w)
+    s = s.reshape((-1, n)).contiguous()
+    linear = nn.Linear(m, n)
+    linear.weight.data = ref.t()
+    # Workaround to test some special cases that are forbidden by the API
+    layer3 = marlin.Layer3bit(256, 256, groupsize=groupsize)
+    layer4 = marlin.Layer(256, 256, groupsize=groupsize)
+    if groupsize == -1:
+        groupsize = m
+    layer3.k = m
+    layer4.k = m
+    layer3.n = n
+    layer4.n = n
+    layer3.groupsize = groupsize
+    layer4.groupsize = groupsize
+    layer4.B = torch.empty((m // 16, n * 16 // 8), dtype=torch.int, device=DEV)
+    layer4.s = torch.empty((m // groupsize, n), dtype=torch.half, device=DEV)
+    layer4.pack(linear, s.t())
+    q4 = layer4.B
+    s4 = layer4.s
+
+    layer3.B1 = torch.empty((m // 16, n * 16 * 2 // 32), dtype=torch.int, device=DEV)
+    layer3.B2 = torch.empty((m // 16, n * 16 // 32), dtype=torch.int, device=DEV)
+    layer3.s = torch.empty((m // groupsize, n), dtype=torch.half, device=DEV)
+    layer3.pack(linear, s.t())
+    q1 = layer3.B1
+    q2 = layer3.B2
+    s3 = layer3.s
+    return ref3, ref4, q4, q1, q2, s4, s3
+
+
+
 def gen_quant3(m, n, groupsize=-1):
     tile = 16
     maxq = 2 ** 3 - 1
@@ -61,15 +119,24 @@ def gen_quant3(m, n, groupsize=-1):
 
 class Test(unittest.TestCase):
 
-    def run_problem(self, m, n, k, thread_k, thread_n, groupsize=-1):
+    def run_problem(self, m, n, k, thread_k, thread_n, groupsize=-1):  # 16, 512, 768, 64, 256
         print('% 5d % 6d % 6d % 4d % 4d % 4d' % (m, n, k, thread_k, thread_n, groupsize))
         A = torch.ones((m, k), dtype=torch.half, device=DEV)
         B_ref, B1, B2, s = gen_quant3(k, n, groupsize=groupsize)
+        #B_ref, B1, B2, s = gen_quant4(k, n, groupsize=groupsize)
+        #ref3, ref4, q4, q1, q2, s4, s3 = gen_quant4and3(m, n, groupsize=-1)
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
         C_ref = torch.matmul(A, B_ref)
         workspace = torch.zeros(n // 128 * 16, device=DEV)
         marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
         torch.cuda.synchronize()
+        print(B_ref)
+        print("````````````````")
+        print(B1)  # 使用百分号格式化
+        print("````````````````")
+        print(C)
+        print("````````````````")
+        print(C_ref)
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
 
     """
