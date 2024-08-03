@@ -26,12 +26,61 @@ def get_problem(m, n, k, groupsize=-1):
         groupsize = k
     dev = torch.device('cuda:0')
     A = torch.randn((m, k), dtype=torch.half, device=dev)
-    B = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
+    B1 = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
+    B2 = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
     B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
     C = torch.zeros((m, n), dtype=torch.half, device=dev)
     s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
     torch.cuda.synchronize()
     return A, B, C, B_ref, s
+
+
+def gen_quant3(m, n, groupsize=-1):
+    maxq = 2 ** 3 - 1
+    w = torch.randn((m, n), dtype=torch.half, device=dev)
+
+    if groupsize != -1:
+        w = w.reshape((-1, groupsize, n))
+        w = w.permute(1, 0, 2)
+        w = w.reshape((groupsize, -1))
+    s = torch.max(torch.abs(w), 0, keepdim=True)[0]
+    s *= 2 / maxq
+    w = torch.round(w / s).int()
+    w += (maxq + 1) // 2
+    w = torch.clamp(w, 0, maxq)
+    ref = (w - (maxq + 1) // 2).half() * s
+    #ref = w
+    if groupsize != -1:
+        def reshape(w):
+            w = w.reshape((groupsize, -1, n))
+            w = w.permute(1, 0, 2)
+            w = w.reshape((m, n)).contiguous()
+            return w
+        ref = reshape(ref)
+        w = reshape(w)
+
+    s = s.reshape((-1, n)).contiguous()
+    linear = nn.Linear(m, n)
+    linear.weight.data = ref.t()
+    # Workaround to test some special cases that are forbidden by the API
+    #layer = marlin.Layer3bit(256, 256, groupsize=groupsize)
+    layer = marlin.Layer3bit(m, n, groupsize=groupsize)
+    if groupsize == -1:
+        groupsize = m
+    layer.k = m
+    layer.n = n
+    layer.groupsize = groupsize
+    layer.B1 = torch.empty((m // 16, n * 16 * 2 // 32), dtype=torch.int, device=dev)
+    layer.B2 = torch.empty((m // 16, n * 16 // 32), dtype=torch.int, device=dev)
+    layer.s = torch.empty((m // groupsize, n), dtype=torch.half, device=dev)
+    layer.pack(linear, s.t())
+    q1 = layer.B1
+    q2 = layer.B2
+    s = layer.s
+    return ref, q1, q2, s
+
+
+
 
 def benchmark_dense(A, B, C):
     res = benchmark(lambda: torch.matmul(A, B, out=C))
@@ -43,7 +92,7 @@ def benchmark_dense(A, B, C):
 
 def benchmark_quant(A, B, C, s, thread_k, thread_n, sms):
     workspace = torch.zeros(C.shape[1] // 128 * 16, device=torch.device('cuda:0'))
-    res = benchmark(lambda: marlin.mul(A, B, C, s, workspace, thread_k, thread_n, sms))
+    res = benchmark(lambda: marlin.mul_3bit(A, B, C, s, workspace, thread_k, thread_n, sms))
     return {
         's': res,
         'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
