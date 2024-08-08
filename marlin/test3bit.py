@@ -153,7 +153,7 @@ class Test(unittest.TestCase):
     
     def test_k_stages_divisibility(self):
         print("test_k_stages_divisibility")
-        for k in [3 * 64 + 64 * 4 * 2 + 64 * i for i in range(1, 6,2)]:
+        for k in [3 * 64 + 64 * 4 * 2 + 64 * i for i in range(1,6,2)]:
             self.run_problem(16, 2 * 256, k, 64, 256)
 
     def test_very_few_stages(self):

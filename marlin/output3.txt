@@ -1,0 +1,8 @@
+matmul time: 294 
+matmul time: 227 
+matmul time: 310 
+matmul time: 173 
+matmul time: 397 
+matmul time: 173 
+test_tiles
+   16   2048   2048  128  128   -1

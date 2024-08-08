@@ -67,20 +67,22 @@ class Test(unittest.TestCase):
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
 
     def test_tiles(self):
-        print()
+        #self.run_problem(16, 2 * 21760, 8192, 128,128)
+              
+        print("test_tiles")
         for m in [1, 2, 3, 4, 8, 12, 16, 24, 32, 48, 64, 118, 128, 152, 768, 1024]:
             for thread_k, thread_n in [(64, 256), (128, 128)]:
                 if m > 16 and thread_k == 128:
                     continue
                 self.run_problem(m, 2 * 256, 1024, thread_k, thread_n)
-
+   
     def test_k_stages_divisibility(self):
-        print()
+        print("test_k_stages_divisibility")
         for k in [3 * 64 + 64 * 4 * 2 + 64 * i for i in range(1, 4)]:
             self.run_problem(16, 2 * 256, k, 64, 256)
 
     def test_very_few_stages(self):
-        print()
+        print("test_very_few_stages")
         for k in [64, 128, 192]:
             self.run_problem(16, 2 * 256, k, 64, 256)
 
@@ -120,7 +122,7 @@ class Test(unittest.TestCase):
                         self.run_problem(batch, layer[1], layer[0], thread_k, thread_n)
 
     def test_errors(self):
-        print()
+        print("test_errors")
         m, n, k = 16, 256, 64
         A = torch.randn((m, k), dtype=torch.half, device=DEV)
         B_ref, B, s = gen_quant4(k, n)
@@ -147,13 +149,12 @@ class Test(unittest.TestCase):
         self.assertTrue(err)
 
     def test_groups(self):
-        print()
+        print("test_groups")
         for m in [16]:
             for groupsize in [128]:
                 for n, k in [(256, 512), (256, 1024), (256 * 128, 1024)]:
                     for thread_shape in [(128, 128), (64, 256)]:
                         self.run_problem(m, n, k, *thread_shape, groupsize)
-
 
 if __name__ == '__main__':
     unittest.main()
