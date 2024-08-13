@@ -37,7 +37,7 @@ def test_3bit():
 def gen_quant3(m, n, groupsize=-1):
     tile = 16
     maxq = 2 ** 3 - 1
-    w = torch.ones((m, n), dtype=torch.half, device=DEV)
+    w = torch.randn((m, n), dtype=torch.half, device=DEV)
     if groupsize != -1:
         w = w.reshape((-1, groupsize, n))
         w = w.permute(1, 0, 2)
@@ -80,7 +80,7 @@ def gen_quant3(m, n, groupsize=-1):
 
 def run_problem(m, n, k, thread_k, thread_n, groupsize=-1):
     print('% 5d % 6d % 6d % 4d % 4d % 4d' % (m, n, k, thread_k, thread_n, groupsize))
-    A = torch.ones((m, k), dtype=torch.half, device=DEV)
+    A = torch.randn((m, k), dtype=torch.half, device=DEV)
     B_ref, B1, B2, s = gen_quant3(k, n, groupsize=groupsize)
     C = torch.zeros((m, n), dtype=torch.half, device=DEV)
     C_ref = torch.matmul(A, B_ref)

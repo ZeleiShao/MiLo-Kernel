@@ -55,7 +55,7 @@ using FragC = Vec<float, 4>;
 using FragS = Vec<half2, 1>; // quantization scales
 
 using FragB_8 = Vec<FragB, 8>;
-using FragB_2 = Vec<FragB, 2>;
+//using FragB_2 = Vec<FragB, 2>;
 
 // Predicated asynchronous global->shared copy; used for inputs A where we apply predication to handle batchsizes that
 // are not multiples of 16.
@@ -82,33 +82,6 @@ __device__ inline void cp_async4_stream(void* smem_ptr, const void* glob_ptr) {
     "   .reg .b64 p;\n"
     "   createpolicy.fractional.L2::evict_first.b64 p, 1.0;"
     "   cp.async.cg.shared.global.L2::cache_hint [%0], [%1], %2, p;\n"
-    "}\n" :: "r"(smem), "l"(glob_ptr), "n"(BYTES)
-  );
-}
-
-// Asynchronous global->shared copy with a cache hint indicating that the values may be evicted immediately; used for
-// quantized weights B, which are only accessed precisely once and should thus not pollute the L2 cache which we need
-// for inputs A and outputs C. 
-__device__ inline void cp_async_stream2(void* smem_ptr, const void* glob_ptr) {
-  const int BYTES = 8;
-  uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
-  asm volatile(
-    "{\n"
-    "   .reg .b64 p;\n"
-    "   createpolicy.fractional.L2::evict_first.b64 p, 1.0;"
-    "   cp.async.ca.shared.global.L2::cache_hint [%0], [%1], %2, p;\n"
-    "}\n" :: "r"(smem), "l"(glob_ptr), "n"(BYTES)
-  );
-}
-
-__device__ inline void cp_async_stream1(void* smem_ptr, const void* glob_ptr) {
-  const int BYTES = 4;
-  uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
-  asm volatile(
-    "{\n"
-    "   .reg .b64 p;\n"
-    "   createpolicy.fractional.L2::evict_first.b64 p, 1.0;"
-    "   cp.async.ca.shared.global.L2::cache_hint [%0], [%1], %2, p;\n"
     "}\n" :: "r"(smem), "l"(glob_ptr), "n"(BYTES)
   );
 }
@@ -193,7 +166,6 @@ __device__ inline void scale(FragB& frag_b, FragS& frag_s, int i) {
   frag_b[1] = __hmul2(frag_b[1], s);
 }
 
-
 // Wait until barrier reaches `count`, then lock for current threadblock.
 __device__ inline void barrier_acquire(int* lock, int count) {
   if (threadIdx.x == 0) {
@@ -205,7 +177,6 @@ __device__ inline void barrier_acquire(int* lock, int count) {
   }
   __syncthreads();
 }
-
 
 // Release barrier and increment visitation count.
 __device__ inline void barrier_release(int* lock, bool reset = false) {
@@ -221,7 +192,6 @@ __device__ inline void barrier_release(int* lock, bool reset = false) {
     asm volatile ("red.relaxed.gpu.global.add.s32 [%0], %1;\n" : : "l"(lock), "r"(val)); 
   }
 }
-
 
 template <
   const int threads, // number of threads in a threadblock
@@ -343,7 +313,6 @@ __global__ void Marlin_3bit_faster(
   constexpr int s_sh_stage = s_sh_stride;
   int s_gl_rd_delta = s_gl_stride;
 
-  
   int a_gl_rd = a_gl_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);// Global A read index of current thread.
   a_gl_rd += a_gl_rd_delta_o * slice_row;
   int a_sh_wr = a_sh_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);// Shared write index of current thread.
@@ -353,6 +322,11 @@ __global__ void Marlin_3bit_faster(
   int b_gl_rd = b_gl_stride * (threadIdx.x / b_sh_stride) + (threadIdx.x % b_sh_stride);
   b_gl_rd += b_sh_stride * slice_col;
   b_gl_rd += b_gl_rd_delta_o * slice_row;
+
+  int b_gl_rd_2 = b_gl_stride * ((threadIdx.x-32) / b_sh_stride) + ((threadIdx.x-32)% b_sh_stride);
+  b_gl_rd_2 += b_sh_stride * slice_col;
+  b_gl_rd_2 += b_gl_rd_delta_o * slice_row;
+
   int b_sh_wr = threadIdx.x; //threadid
   int b_sh_rd = threadIdx.x;//threadid
 
@@ -378,29 +352,33 @@ __global__ void Marlin_3bit_faster(
   // subsequent accesses with a tile by maintining multiple pointers (we have enough registers), a tiny optimization.
   const int4* B1_ptr[b_sh_wr_iters];
   const int4* B2_ptr[b_sh_wr_iters];
-
+/*
   if (threadIdx.x % 64 < 32){
   #pragma unroll
   for (int i = 0; i < b_sh_wr_iters; i++)
   {
     B1_ptr[i] = B1 + b_gl_rd_delta_i/2 * i + (b_gl_rd / 64) * 32 + b_gl_rd % 64;
-    //if ( blockIdx.x == 0 &&threadIdx.x %64 <2){
-      //    printf("faster : threadIdx: %d, i: %d, off: %d, b_gl_rd_delta_i : %d, b_sh_stride : %d,  b_gl_stride: %d, b_gl_rd_delta_o : %d, slice_col: %d, slice_row : %d \n", threadIdx.x, i, B1_ptr[i] - B1, b_gl_rd_delta_i, b_sh_stride, b_gl_stride, b_gl_rd_delta_o, slice_col, slice_row);
-    //}
   }
   }
-  if (threadIdx.x % 128 < 32){
-      #pragma unroll
+  else if (threadIdx.x % 128 < 64){
+  #pragma unroll
   for (int i = 0; i < b_sh_wr_iters; i++)
   {
-    B2_ptr[i] = B2 + b_gl_rd_delta_i/4 * i + (b_gl_rd / 128) * 32 + b_gl_rd % 128; 
+    B2_ptr[i] = B2 + b_gl_rd_delta_i/4 * i + (b_gl_rd_2 / 128) * 32 +  b_gl_rd_2 % 128; 
   }
+  }*/
+ #pragma unroll
+  for (int i = 0; i < b_sh_wr_iters; i++)
+  {
+    B1_ptr[i] = B1 + b_gl_rd_delta_i/2 * i + (b_gl_rd / 64) * 32 + b_gl_rd % 64;
+    B2_ptr[i] = B2 + b_gl_rd_delta_i/4 * i + (b_gl_rd_2 / 128) * 32 +  b_gl_rd_2 % 128; 
   }
+
 
   extern __shared__ int4 sh[];
   // Shared memory storage for global fetch pipelines. 
   int4* sh_a = sh;
-  int4* sh_b1 = (sh_a + stages * a_sh_stage);
+  int4* sh_b1 = sh_a + stages * a_sh_stage;
   int4* sh_b2 = sh_b1 + stages *b_sh_stage/2;
   int4* sh_s = sh_b1 + stages * b_sh_stage;
 
@@ -418,7 +396,7 @@ __global__ void Marlin_3bit_faster(
       reinterpret_cast<float*>(frag_c)[i] = 0;
   };
 
-    // To ensure that writing and reading A tiles to/from shared memory, the latter in fragment format, is fully bank
+  // To ensure that writing and reading A tiles to/from shared memory, the latter in fragment format, is fully bank
   // conflict free, we need to use a rather fancy XOR-based layout. The key here is that neither reads nor writes of 
   // the 16-byte `int4` blocks of 8 consecutive threads involve the same shared memory banks. Further, it seems (based
   // on NSight-Compute) that each warp must also write a consecutive memory segment?
@@ -458,30 +436,19 @@ __global__ void Marlin_3bit_faster(
       
       int4* sh_b1_stage = sh_b1 + (b_sh_stage * pipe)/2;
       int4* sh_b2_stage = sh_b2 + (b_sh_stage * pipe)/4;
-
-      if (threadIdx.x % 64 < 32){
+      bool transferB2 = threadIdx.x % 128 < 64 && threadIdx.x % 128 > 31;
       #pragma unroll
       for (int i = 0; i < b_sh_wr_iters; i++) {
-        cp_async4_stream(&sh_b1_stage[b_sh_wr_delta/2 * i + (b_sh_wr / 64) * 32 + b_sh_wr % 64], B1_ptr[i]); 
-        //if (blockIdx.x == 0 && i == 1)
-          //printf("faster : threadIdx: %d, i: %d, off: %d \n",threadIdx.x, i,  B1_ptr[i]-B1);
+        cp_async4_pred(&sh_b1_stage[b_sh_wr_delta/2 * i + (b_sh_wr / 64) * 32 + b_sh_wr % 64], B1_ptr[i],threadIdx.x % 64 < 32);
+        cp_async4_pred(&sh_b2_stage[b_sh_wr_delta/4 * i + (b_sh_wr / 128) * 32 + ((b_sh_wr - 32) % 128)], B2_ptr[i],transferB2); 
         B1_ptr[i] += b_gl_rd_delta_o/2;
-      }
-    }
-
-      if (threadIdx.x % 128 < 32){
-      #pragma unroll
-      for (int i = 0; i < b_sh_wr_iters; i++) {
-        cp_async4_stream(&sh_b2_stage[b_sh_wr_delta/4 * i + (b_sh_wr / 128) * 32 + b_sh_wr % 128], B2_ptr[i]);
         B2_ptr[i] += b_gl_rd_delta_o/4;
       }
-    }
-
       // Only fetch scales if this tile starts a new group
       if (group_blocks != -1 && pipe % (group_blocks / thread_k_blocks) == 0) {
         int4* sh_s_stage = sh_s + s_sh_stage * pipe;
-        if (s_sh_wr_pred)
-          cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);
+        //if (s_sh_wr_pred)
+        cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd],s_sh_wr_pred);
         s_gl_rd += s_gl_rd_delta;
       }
     }
@@ -496,7 +463,6 @@ __global__ void Marlin_3bit_faster(
     cp_async_wait<stages - 2>();
     __syncthreads();
   };
-
 
   // Load the next sub-tile from the current location in the shared memory pipe into the current register buffer.
   auto fetch_to_registers = [&] (int k, int pipe) {
@@ -513,15 +479,14 @@ __global__ void Marlin_3bit_faster(
       ldsm4(frag_a[k % 2][i], &sh_a_stage[a_sh_rd_trans[k % b_sh_wr_iters][i]]);
     I2* sh_b1_stage = reinterpret_cast<I2*>(sh_b1) + b_sh_stage * pipe;
     int* sh_b2_stage = reinterpret_cast<int*>(sh_b2) + b_sh_stage * pipe;
-
     frag_b1_quant[k % 2] = sh_b1_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
     frag_b2_quant[k % 2] = sh_b2_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
     //I2* a = &sh_b1_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
     //I2* bbb = reinterpret_cast<I2*>(sh_b1);
-    //if (blockIdx.x == 0 && frag_b1_quant[k % 2][0]!= -1)
-    //printf("thread %d, block %d, b00 %x, b01 %x,b1 %x \n",threadIdx.x, blockIdx.x, frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1], frag_b2_quant[k % 2]);
-
-    //printf("registers: thread %d, %d, %d, %d, %d, %d, %d % \n",threadIdx.x,k, b_sh_rd_delta,b_sh_wr_iters, b_sh_rd, b_sh_stage, pipe);
+    //if (frag_b1_quant[k % 2][0]!= frag_b2_quant[k % 2] && blockIdx.x == 0)
+      //printf("thread %d, block %d, b00 %x, b01 %x,b1 %x \n",threadIdx.x, blockIdx.x, frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1], frag_b2_quant[k % 2]);
+      //printf("registers: %d, %d, %d, %d, %d, %d, %d, %d, %d %d %d  \n",blockIdx.x, threadIdx.x,k, b_sh_rd_delta,b_sh_wr_iters, b_sh_rd, b_sh_stage, pipe, frag_b1_quant[k % 2][0], frag_b2_quant[k % 2]); 
+     // 0, 64, 2, 256, 2, 64, 512, 1 1119879168 -1
   };
 
   __shared__ half2 deq2[64][32];
@@ -556,12 +521,91 @@ __global__ void Marlin_3bit_faster(
       for (int i = 0; i < thread_m_blocks; i++) {
         mma(frag_a[k % 2][i], frag_b[2*j], frag_c[i][j][0]);
         mma(frag_a[k % 2][i], frag_b[2*j+1], frag_c[i][j][1]);
-        //if( blockIdx.x == 3)
-        //printf("blockIdx.x : %d, threadIdx.x : %d, frag_b: %x: frag_c:%x \n",blockIdx.x, threadIdx.x, frag_b[2*j], frag_c[i][j][0]);
-
       }
     }
   };
+
+  // Execute the actual tensor core matmul of a sub-tile. 
+  auto matmul_faster = [&] (int k) {
+    // We have the m dimension as the inner loop in order to encourage overlapping dequantization and matmul operations.
+    unsigned int q1 = as_unsigned(frag_b1_quant[k % 2][0]);
+    unsigned int q2 = as_unsigned(frag_b1_quant[k % 2][1]);
+    unsigned int q3 = as_unsigned(frag_b2_quant[k % 2]);
+    FragB_8 rtn;
+
+    unsigned int tmp = 0;
+  rtn[0][0] = deq2[(q1 >>  0) & 0x3f][off];
+  rtn[0][1] = deq2[(q1 >>  6) & 0x3f][off];
+  rtn[1][0] = deq2[(q1 >> 12) & 0x3f][off];
+  rtn[1][1] = deq2[(q1 >> 18) & 0x3f][off];
+
+  int j = 0;
+  if (group_blocks != -1) {
+        scale(rtn[2*j], frag_s[k % 2][j], 0);
+        scale(rtn[2*j+1], frag_s[k % 2][j], 1);
+      }
+
+      #pragma unroll
+      for (int i = 0; i < thread_m_blocks; i++) {
+        mma(frag_a[k % 2][i], rtn[2*j], frag_c[i][j][0]);
+        mma(frag_a[k % 2][i], rtn[2*j+1], frag_c[i][j][1]);
+      }
+
+  rtn[2][0] = deq2[(q1 >> 24) & 0x3f][off];
+  tmp = ((q1 >> 30) & 0x3f) | ((q2 << 2) & 0x3c);
+  rtn[2][1] = deq2[tmp][off];
+  q2 >>= 4;
+  rtn[3][0] = deq2[(q2 >> 0) & 0x3f][off];
+  rtn[3][1] = deq2[(q2 >> 6) & 0x3f][off];
+  j += 1;
+      if (group_blocks != -1) {
+        scale(rtn[2*j], frag_s[k % 2][j], 0);
+        scale(rtn[2*j+1], frag_s[k % 2][j], 1);
+      }
+
+      #pragma unroll
+      for (int i = 0; i < thread_m_blocks; i++) {
+        mma(frag_a[k % 2][i], rtn[2*j], frag_c[i][j][0]);
+        mma(frag_a[k % 2][i], rtn[2*j+1], frag_c[i][j][1]);
+      }
+
+  rtn[4][0] = deq2[(q2 >> 12) & 0x3f][off];
+  rtn[4][1] = deq2[(q2 >> 18) & 0x3f][off];
+  tmp = ((q2 >> 24) & 0x0f) | ((q3 << 4) & 0x30); 
+  rtn[5][0] = deq2[tmp][off];
+  q3 >>= 2;
+  rtn[5][1] = deq2[(q3 >> 0) & 0x3f][off];
+  j += 1;
+  if (group_blocks != -1) {
+        scale(rtn[2*j], frag_s[k % 2][j], 0);
+        scale(rtn[2*j+1], frag_s[k % 2][j], 1);
+      }
+
+      #pragma unroll
+      for (int i = 0; i < thread_m_blocks; i++) {
+        mma(frag_a[k % 2][i], rtn[2*j], frag_c[i][j][0]);
+        mma(frag_a[k % 2][i], rtn[2*j+1], frag_c[i][j][1]);
+      }
+
+  rtn[6][0] = deq2[(q3 >> 6) & 0x3f][off];
+  rtn[6][1] = deq2[(q3 >> 12) & 0x3f][off];
+  rtn[7][0] = deq2[(q3 >> 18) & 0x3f][off];
+  rtn[7][1] = deq2[(q3 >> 24) & 0x3f][off];
+
+    j += 1;
+      if (group_blocks != -1) {
+        scale(rtn[2*j], frag_s[k % 2][j], 0);
+        scale(rtn[2*j+1], frag_s[k % 2][j], 1);
+      }
+
+      #pragma unroll
+      for (int i = 0; i < thread_m_blocks; i++) {
+        mma(frag_a[k % 2][i], rtn[2*j], frag_c[i][j][0]);
+        mma(frag_a[k % 2][i], rtn[2*j+1], frag_c[i][j][1]);
+      }
+  };
+
+
 
   // Since we slice across the k dimension of a tile in order to increase the number of warps while keeping the n
   // dimension of a tile reasonable, we have multiple warps that accumulate their partial sums of the same output
@@ -759,16 +803,14 @@ __global__ void Marlin_3bit_faster(
           pipe++;
           wait_for_stage();
         }
-        matmul(k);
+        //matmul(k);
+        matmul_faster(k);
       }
       slice_iters--;
       if (slice_iters == 0)
         break;
     }
-      //printf("right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-      //printf("wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-          
-    a_gl_rd += a_gl_rd_delta_o * stages;
+     a_gl_rd += a_gl_rd_delta_o * stages;
     
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
     // readable, other ways of writing the loop seemed to noticeably worse performance after compliation.
@@ -792,7 +834,6 @@ __global__ void Marlin_3bit_faster(
           reinterpret_cast<int4*>(&frag_s)[1] = sh_s[s_sh_rd + 4];
         }
       }
-
       if (slice_count > 1) { // only globally reduce if there is more than one block in a slice
         //printf("thread %d, block %d, use the global_reduce \n",threadIdx.x, blockIdx.x);
         barrier_acquire(&locks[slice_col], slice_idx);

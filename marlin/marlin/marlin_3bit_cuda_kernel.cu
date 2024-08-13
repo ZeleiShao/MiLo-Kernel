@@ -410,9 +410,9 @@ __global__ void Marlin_3bit(
   {
     B1_ptr[i] = B1 + b_gl_rd_delta_i * i + b_gl_rd;
     B2_ptr[i] = B2 + b_gl_rd_delta_i * i + b_gl_rd;
-       // if (blockIdx.x == 0 && threadIdx.x %64 <2){
-         // printf("marlin3bit : threadIdx: %d, i: %d, off: %d, b_gl_rd_delta_i : %d, b_sh_stride : %d,  b_gl_stride: %d, b_gl_rd_delta_o : %d, slice_col: %d, slice_row : %d \n", threadIdx.x, i, B1_ptr[i] - B1, b_gl_rd_delta_i, b_sh_stride, b_gl_stride, b_gl_rd_delta_o, slice_col, slice_row);
-    //}
+    if (blockIdx.x  == 0 ){
+      printf("marlin3bit : threadIdx: %d, i: %d, off: %d, b_gl_rd_delta_i : %d, b_sh_stride : %d,  b_gl_stride: %d, b_gl_rd_delta_o : %d, slice_col: %d, slice_row : %d \n", threadIdx.x, i, B1_ptr[i] - B1, b_gl_rd_delta_i, b_sh_stride, b_gl_stride, b_gl_rd_delta_o, slice_col, slice_row);
+    }
   }
 
   extern __shared__ int4 sh[];
@@ -440,7 +440,7 @@ __global__ void Marlin_3bit(
   // Asynchronously fetch the next A, B and s tile from global to the next shared memory pipeline location.
   auto fetch_to_shared = [&] (int pipe, int a_off, bool pred = true) {
     if (pred) {
-      if(blockIdx.x == 0 && threadIdx.x == 0) printf("here in share! %d \n", pipe);
+      //if(blockIdx.x == 0 && threadIdx.x == 0) printf("here in share! %d \n", pipe);
       int4* sh_a_stage = sh_a + a_sh_stage * pipe;
       #pragma unroll
       for (int i = 0; i < a_sh_wr_iters; i++) {
@@ -458,7 +458,7 @@ __global__ void Marlin_3bit(
         cp_async_stream1(&sh_b2_stage[b_sh_wr_delta * i + b_sh_wr], B2_ptr[i]);
         //if (blockIdx.x == 0 && i == 1)
           //printf("marlin3bit : threadIdx: %d, i: %d,sh_off: %d, off: %d \n",threadIdx.x, i,b_sh_wr + b_sh_wr_delta * i, B1_ptr[i] - B1);
-
+        //printf("marlin : %d,  %d,%d \n",blockIdx.x, threadIdx.x,  B2_ptr[i]-B2);
         B1_ptr[i] += b_gl_rd_delta_o;
         B2_ptr[i] += b_gl_rd_delta_o;
       }
@@ -502,10 +502,9 @@ __global__ void Marlin_3bit(
     int* sh_b2_stage = sh_b2 + b_sh_stage * pipe;
     frag_b1_quant[k % 2] = sh_b1_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
     frag_b2_quant[k % 2] = sh_b2_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
-    //if(blockIdx.x == 0)
+    //if(threadIdx.x == 0)
       //printf("registers: thread %d, %d, %d, %d, %d, %d, %d % \n",threadIdx.x,k, b_sh_rd_delta,b_sh_wr_iters, b_sh_rd, b_sh_stage, pipe);
-
-    //printf("thread %d, block %d, b00 %x, b01 %x,b1 %x \n",threadIdx.x, blockIdx.x, frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1], frag_b2_quant[k % 2]);
+      //printf("thread %d, block %d, b00 %x, b01 %x,b1 %x , k %d, pipe %d\n",threadIdx.x, blockIdx.x, frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1], frag_b2_quant[k % 2], k, pipe);
   };
 
   __shared__ half2 deq2[64][32];
