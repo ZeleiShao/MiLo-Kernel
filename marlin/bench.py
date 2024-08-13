@@ -94,7 +94,8 @@ def benchmark_dense(A, B, C):
 
 def benchmark_quant(A, B1, B2, C, s, thread_k, thread_n, sms):
     workspace = torch.zeros(C.shape[1] // 128 * 16, device=torch.device('cuda:0'))
-    res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
+    #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
+    res = benchmark(lambda: marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
     return {
         's': res,
         'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
@@ -172,11 +173,11 @@ for groupsize in [-1, 128] if ALL else [128]:
                 B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
                 C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
-                if model == 'ideal' and batch == 16:
+                #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
-                    res_q = benchmark_quant(A, B1, B2, C, s, 64, 256, SMS)
-                else:
-                    res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
+                res_q = benchmark_quant(A, B1, B2, C, s, 64, 256, SMS)
+                #else:
+                    #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
                 res_q['speedup'] = res_d['s'] / res_q['s']
                 tot_q['s'] += res_q['s']
                 for k in tot_q:

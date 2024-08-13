@@ -47,6 +47,20 @@ def mul_3bit(A, B1, B2, C, s, workspace, thread_k=-1, thread_n=-1, sms=-1, max_p
     """
     marlin_cuda.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms, max_par)
 
+def mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k=-1, thread_n=-1, sms=-1, max_par=16):
+    """Marlin FP16xINT3 multiply; can be used within `torch.compile`.
+    @A: `torch.half` input matrix of shape `(m, k)` in standard row-major layout
+    @B: `torch.int` weight matrix of original shape `(k, n)` in Marlin format; see `Layer.pack()`
+    @C: `torch.half` out matrix of shape `(m, n)` in standard row-major layout
+    @s: `torch.half` scales of shape `(m / groupsize, n)`
+    @workspace: `torch.int` tensor with at least `n / 128 * max_par` entries that are all zero
+    @thread_k: `k` size of a thread_tile in `B` (can usually be left as auto -1)
+    @thread_n: `n` size of a thread_tile in `B` (can usually be left as auto -1)
+    @sms: number of SMs to use for the kernel (can usually be left as auto -1)
+    @max_par: maximum number of batch 64 problems to solve in parallel for large input sizes
+    """
+    marlin_cuda.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, sms, max_par)
+
 
 # Precompute permutations for Marlin weight and scale shuffling 
 
@@ -55,7 +69,7 @@ def _get_perms():
     for i in range(32): # 32 threads in a warp
         perm1 = []
         col = i // 4 # column idx in the m16k16n8'mma, 4 = num of half2 in a half of the column (see doc shape)
-        for block in [0, 1]: # m16k16n8's mma 1/2
+        for block in [0, 1]: # m16k16n8's mma 
             for row in [
                 2 * (i % 4), # 0
                 2 * (i % 4) + 1, # 1
@@ -260,6 +274,113 @@ class Layer3bit(nn.Module):
         self.B2[:, :] = q2.to(self.B2.device)
         self.s[:, :] = s.to(self.s.device)
 
+
+class Layer3bitFaster(nn.Module):
+    """PyTorch compatible Marlin layer; 3-bit (symmetric grouped) linear layer without bias."""
+
+    def __init__(self, infeatures, outfeatures, groupsize=-1):
+        """Create an empty Marlin layer.
+        @infeatures: number of input features (must be divisible by 128)
+        @outfeatures: number of output features (must be divisible by 256)
+        @groupsize: quantization groupsize (must be -1 or 128)
+        """
+        super().__init__()
+        if groupsize not in [-1, 128]:
+            raise ValueError('Only groupsize -1 and 128 are supported.')
+        #print("infeature: %d, outfeature: %d" % (infeatures, outfeatures))
+        if infeatures % 128 != 0 or outfeatures % 256 != 0:
+            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if groupsize == -1:
+            groupsize = infeatures
+        if infeatures % groupsize != 0:
+            raise ValueError('`infeatures` must be divisible by `groupsize`.')
+        self.k = infeatures
+        self.n = outfeatures
+        self.groupsize = groupsize
+        self.register_buffer('B1', torch.empty((self.k // 16,2 * self.n * 16 // 32 ), dtype=torch.int))
+        self.register_buffer('B2', torch.empty((self.k // 16, self.n * 16 // 32 ), dtype=torch.int))
+        self.register_buffer('s', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
+        # 128 is currently the minimum `tile_n`, hence it gives the maximum workspace size; 16 is the default `max_par`
+        self.register_buffer('workspace', torch.zeros(self.n // 128 * 16, dtype=torch.int), persistent=False)
+
+    def forward(self, A):
+        C = torch.empty(A.shape[:-1] + (self.s.shape[1],), dtype=A.dtype, device=A.device)
+        mul_3bit_faster(A.view((-1, A.shape[-1])), self.B1, self.B2, C.view((-1, C.shape[-1])), self.s, self.workspace)
+        return C
+
+    def pack(self, linear, scales):
+        """Pack a fake-quantized linear layer into this actual Marlin representation.
+        @linear: fake-quantized `torch.nn.Linear` layer to convert (must be of type `torch.half`)
+        @scales: corresponding quantization scales of shape `(infeatures, groups)`
+        """ 
+        if linear.weight.dtype != torch.half:
+            raise ValueError('Only `torch.half` weights are supported.')
+        tile = 16
+        maxq = 2 ** 3 - 1
+        s = scales.t()
+        w = linear.weight.data.t() # (in-features, out-features) (k, n)
+
+        if self.groupsize != self.k:
+            w = w.reshape((-1, self.groupsize, self.n)) # (k, n) -> (k/group_size, self.group_size, n)
+            w = w.permute(1, 0, 2) #(self.group_size, k/group_size, n)
+            w = w.reshape((self.groupsize, -1)) # (self.group_size, k/group_size * n)
+            s = s.reshape((1, -1)) 
+
+        w = torch.round(w / s).int()
+        w += (maxq + 1) // 2
+        w = torch.clamp(w, 0, maxq)
+        if self.groupsize != self.k:
+            w = w.reshape((self.groupsize, -1, self.n)) # (group_size, k/group_size, n)
+            w = w.permute(1, 0, 2)
+            w = w.reshape((self.k, self.n)).contiguous()
+            s = s.reshape((-1, len(_scale_perm)))[:, _scale_perm]
+        else:
+            s = s.reshape((-1, len(_scale_perm_single)))[:, _scale_perm_single]
+        s = s.reshape((-1, self.n)).contiguous()
+        w = w.reshape((self.k // tile, tile, self.n // tile, tile))
+
+        w = w.permute((0, 2, 1, 3))
+        w = w.reshape((self.k // tile, self.n * tile)) 
+        res = w
+        res = res.reshape((-1, _perm.numel()))[:, _perm].reshape(res.shape)
+
+        # int3相比于int4的改动
+        # 这里先只考虑简单情况； 这种情况下的int3量化，每32个数视为一组，放入3个uint32中
+        assert res.shape[1] % 32 == 0 , "res.shape[1] % 32 != 0"   
+        qsize = res.shape[1]//32
+        q1 = np.zeros((res.shape[0], 2 * qsize), dtype=np.uint32)
+        q2 = np.zeros((res.shape[0], qsize), dtype=np.uint32)
+        res = res.cpu().numpy().astype(np.uint32)   
+        for i in range(0,qsize):
+            for j in range(4):
+                q1[:,2*i] |= res[:,32*i+j] << 6*j
+                q1[:,2*i ] |= res[:,32*i+j+4] << 6*j+3
+                q2[:,i ] |= res[:,32*i+j+24]<< 6 * j + 8
+                q2[:,i ] |= res[:,32*i+j+28]<< 6 * j + 11
+            q1[:,2*i] |= res[:,32*i+8]<< 24
+            q1[:,2*i ] |= res[:,32*i+12]<< 27
+            q1[:,2*i] |= res[:,32*i+9] << 30
+            q1[:,2*i+1] |= res[:,32*i+9]>> 2
+            q1[:,2*i+1] |= res[:,32*i+13] << 1
+            q1[:,2*i+1] |= res[:,32*i+10] << 4
+            q1[:,2*i+1] |= res[:,32*i+14] << 7
+            q1[:,2*i+1] |= res[:,32*i+11]<< 10
+            q1[:,2*i+1] |= res[:,32*i+15]<< 13
+            q1[:,2*i+1] |= res[:,32*i+18]<< 28
+            q1[:,2*i+1] |= res[:,32*i+22]<< 31
+            q1[:,2*i+1] |= res[:,32*i+16]<< 16
+            q1[:,2*i+1] |= res[:,32*i+20]<< 19
+            q1[:,2*i+1] |= res[:,32*i+17]<< 22
+            q1[:,2*i+1] |= res[:,32*i+21] << 25
+            q2[:,i] |= res[:,32*i+22] >> 1
+            q2[:,i] |= res[:,32*i+19]<< 2
+            q2[:,i] |= res[:,32*i+23]<< 5
+    
+        q1 = torch.from_numpy(q1.astype(np.int32)).to(w.device)
+        q2 = torch.from_numpy(q2.astype(np.int32)).to(w.device)
+        self.B1[:, :] = q1.to(self.B1.device)
+        self.B2[:, :] = q2.to(self.B2.device)
+        self.s[:, :] = s.to(self.s.device)
 
 def replace_linear(module, name_filter=lambda n: True, groupsize=-1, name=''):
     """Recursively replace all `torch.nn.Linear` layers by empty Marlin layers.

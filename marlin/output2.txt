@@ -1,8 +1,3 @@
-matmul time: 297 
-matmul time: 227 
-matmul time: 311 
-matmul time: 173 
-matmul time: 402 
-matmul time: 173 
+main loop 
 test_tiles
-   16   2048   2048  128  128   -1
+   16    256    256   64  256   -1

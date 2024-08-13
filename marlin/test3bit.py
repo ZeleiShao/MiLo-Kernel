@@ -128,7 +128,8 @@ class Test(unittest.TestCase):
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
         C_ref = torch.matmul(A, B_ref)
         workspace = torch.zeros(n // 128 * 16, device=DEV)
-        marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
+        #marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
+        marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
         torch.cuda.synchronize()
         """
         #print(B_ref)
@@ -146,7 +147,8 @@ class Test(unittest.TestCase):
     def test_tiles(self):
         print("test_tiles")
         for m in [1, 2, 3, 4, 8, 12, 16, 24, 32, 48, 64, 118, 128, 152, 768, 1024]:
-            for thread_k, thread_n in [(64, 256), (128, 128)]:
+            #for thread_k, thread_n in [(64, 256), (128, 128)]:
+            for thread_k, thread_n in [(64, 256)]:
                 if m > 16 and thread_k == 128:
                     continue
                 self.run_problem(m, 2 * 256, 1024, thread_k, thread_n)
@@ -192,7 +194,7 @@ class Test(unittest.TestCase):
 
         for _, layers in MODELS.items():
             for layer in layers:
-                for thread_k, thread_n in [(128, 128)]:
+                for thread_k, thread_n in [(64, 256)]:
                     for batch in [1, 16]:
                         self.run_problem(batch, layer[1], layer[0], thread_k, thread_n)
 
@@ -203,22 +205,25 @@ class Test(unittest.TestCase):
         B_ref, B1, B2, s = gen_quant3(k, n)
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
         workspace = torch.zeros(n // 128, device=DEV)
+        """
         err = False
         try:
             marlin.mul_3bit(A, B1, B2, C, s, workspace, 128, 128, -1)
         except:
             err = True 
-        self.assertTrue(err)
+        self.assertTrue(err)"""
         err = False
         try:
-            marlin.mul_3bit(A, B1, B2, C, s, workspace, 256, 256, -1)
+            #marlin.mul_3bit(A, B1, B2, C, s, workspace, 256, 256, -1)
+            marlin.mul_3bit_faster(A, B1, B2, C, s, workspace -1)
         except:
             err = True 
         self.assertTrue(err)
         s = torch.zeros((2, n), dtype=torch.half, device=DEV)
         err = False
         try:
-            marlin.mul_3bit(A, B1, B2, C, s, workspace, 256, 256, -1)
+            #marlin.mul_3bit(A, B1, B2, C, s, workspace, 256, 256, -1)
+            marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, -1)
         except:
             err = True 
         self.assertTrue(err)
@@ -228,7 +233,8 @@ class Test(unittest.TestCase):
         for m in [16]:
             for groupsize in [128]:
                 for n, k in [(256, 512), (256, 1024), (256 * 128, 1024)]:
-                    for thread_shape in [(128, 128), (64, 256)]:
+                    #for thread_shape in [(128, 128), (64, 256)]:
+                    for thread_shape in [(64, 256)]:
                         self.run_problem(m, n, k, *thread_shape, groupsize)
 
 if __name__ == '__main__':

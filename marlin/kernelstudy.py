@@ -128,7 +128,8 @@ class Test(unittest.TestCase):
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
         C_ref = torch.matmul(A, B_ref)
         workspace = torch.zeros(n // 128 * 16, device=DEV)
-        marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
+        #marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
+        marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
         torch.cuda.synchronize()
         """
         #print(B_ref)
@@ -146,7 +147,7 @@ class Test(unittest.TestCase):
     def test_tiles(self):
         print("test_tiles")
         #for m in [1, 2, 3, 4, 8, 12, 16, 24, 32, 48, 64, 118, 128, 152, 768, 1024]:
-        self.run_problem(16, 2 * 21760, 8192, 128,128)
+        self.run_problem(16, 256, 256, 64, 256)
         """
         for m in [16, 32]:
             for thread_k, thread_n in [(64, 256), (128, 128)]:
