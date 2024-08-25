@@ -27,8 +27,7 @@ def get_problem(m, n, k, groupsize=-1):
         groupsize = k
     dev = torch.device('cuda:0')
     A = torch.randn((m, k), dtype=torch.half, device=dev)
-    B1 = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
-    B2 = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
+    B = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
     B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
     C = torch.zeros((m, n), dtype=torch.half, device=dev)
     s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
@@ -102,6 +101,16 @@ def benchmark_quant(A, B1, B2, C, s, thread_k, thread_n, sms):
         'GB/s': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel()) / res / 10 ** 9
     }
 
+def benchmark_quant_4bit(A, B, C, s, thread_k, thread_n, sms):
+    workspace = torch.zeros(C.shape[1] // 128 * 16, device=torch.device('cuda:0'))
+    #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
+    res = benchmark(lambda: marlin.mul(A, B, C, s, workspace, thread_k, thread_n, sms))
+    return {
+        's': res,
+        'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
+        'GB/s': (2 * A.numel() + 4 * B.numel() + 2 * C.numel() + 2 * s.numel()) / res / 10 ** 9
+    }
+
 # Pass the SM count for known GPUs to avoid the kernel having to query this information (this is very minor)
 gpu = torch.cuda.get_device_name(0)
 if 'A100' in gpu:
@@ -171,11 +180,13 @@ for groupsize in [-1, 128] if ALL else [128]:
             for layer in layers:
                 A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
                 B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
+                #A, B, C, B_ref, s = get_problem(layer[0], layer[1], groupsize)
                 C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
                 #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
                 res_q = benchmark_quant(A, B1, B2, C, s, 64, 256, SMS)
+                #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
                 #else:
                     #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
                 res_q['speedup'] = res_d['s'] / res_q['s']

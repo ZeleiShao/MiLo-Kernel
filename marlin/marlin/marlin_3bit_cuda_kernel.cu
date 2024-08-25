@@ -410,9 +410,9 @@ __global__ void Marlin_3bit(
   {
     B1_ptr[i] = B1 + b_gl_rd_delta_i * i + b_gl_rd;
     B2_ptr[i] = B2 + b_gl_rd_delta_i * i + b_gl_rd;
-    if (blockIdx.x  == 0 ){
-      printf("marlin3bit : threadIdx: %d, i: %d, off: %d, b_gl_rd_delta_i : %d, b_sh_stride : %d,  b_gl_stride: %d, b_gl_rd_delta_o : %d, slice_col: %d, slice_row : %d \n", threadIdx.x, i, B1_ptr[i] - B1, b_gl_rd_delta_i, b_sh_stride, b_gl_stride, b_gl_rd_delta_o, slice_col, slice_row);
-    }
+    //if (blockIdx.x  == 0 ){
+    //  printf("marlin3bit : threadIdx: %d, i: %d, off: %d, b_gl_rd_delta_i : %d, b_sh_stride : %d,  b_gl_stride: %d, b_gl_rd_delta_o : %d, slice_col: %d, slice_row : %d \n", threadIdx.x, i, B1_ptr[i] - B1, b_gl_rd_delta_i, b_sh_stride, b_gl_stride, b_gl_rd_delta_o, slice_col, slice_row);
+    //}
   }
 
   extern __shared__ int4 sh[];
@@ -740,7 +740,7 @@ __global__ void Marlin_3bit(
       for (int k = 0; k < b_sh_wr_iters; k++) {
         fetch_to_registers(k + 1, pipe % stages);
         if (k == b_sh_wr_iters - 2) {
-          if(blockIdx.x == 0 && threadIdx.x == 0) printf("slice_iters %d, stages%d, \n",slice_iters, stages);
+          //if(blockIdx.x == 0 && threadIdx.x == 0) printf("slice_iters %d, stages%d, \n",slice_iters, stages);
           fetch_to_shared((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
           //fetch_to_shared_faster((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
           pipe++;
