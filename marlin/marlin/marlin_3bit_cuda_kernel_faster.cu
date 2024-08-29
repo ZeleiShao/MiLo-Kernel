@@ -45,7 +45,6 @@ struct Vec {
   }
 };
 
-using I2 = Vec<int, 2>;
 
 // Matrix fragments for tensor core instructions; their precise layout is documented here: 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
@@ -53,10 +52,7 @@ using FragA = Vec<half2, 4>;
 using FragB = Vec<half2, 2>;
 using FragC = Vec<float, 4>;
 using FragS = Vec<half2, 1>; // quantization scales
-
-using FragB_8 = Vec<FragB, 8>;
-//using FragB_2 = Vec<FragB, 2>;
-
+using I2 = Vec<int, 2>;
 // Predicated asynchronous global->shared copy; used for inputs A where we apply predication to handle batchsizes that
 // are not multiples of 16.
 __device__ inline void cp_async4_pred(void* smem_ptr, const void* glob_ptr, bool pred = true) {
@@ -141,36 +137,6 @@ __device__ inline void ldsm4(FragA& frag_a, const void* smem_ptr) {
   );
 }
 
-__device__ inline FragB_8 dequant(unsigned int q1,unsigned int q2,unsigned int q3, half2 (*deq2)[32], int off) {
-  FragB_8 rtn;
-  unsigned int tmp = 0;
-  half2 zero = __halves2half2(__int2half_ru(4),__int2half_ru(4));
-  rtn[0][0] = deq2[(q1 >>  0) & 0x3f][off];
-  rtn[0][1] = deq2[(q1 >>  6) & 0x3f][off];
-  rtn[1][0] = deq2[(q1 >> 12) & 0x3f][off];
-  //rtn[1][0] = __hsub2_rn(__halves2half2( __int2half_rn((q1 >> 12) & 0x7), __int2half_rn( (q1 >> 15)& 0x7)),zero);
-  rtn[1][1] = deq2[(q1 >> 18) & 0x3f][off];
-  //rtn[1][1] = __hsub2_rn(__halves2half2( __int2half_rn((q1 >> 18) & 0x7), __int2half_rn( (q1 >> 21)& 0x7)),zero);
-
-  rtn[2][0] = deq2[(q1 >> 24) & 0x3f][off];
-  tmp = ((q1 >> 30) & 0x3f) | ((q2 << 2) & 0x3c);
-  rtn[2][1] = deq2[tmp][off];
-  q2 >>= 4;
-  rtn[3][0] = deq2[(q2 >> 0) & 0x3f][off];
-  rtn[3][1] = deq2[(q2 >> 6) & 0x3f][off];
-  rtn[4][0] = deq2[(q2 >> 12) & 0x3f][off];
-  rtn[4][1] = deq2[(q2 >> 18) & 0x3f][off];
-  tmp = ((q2 >> 24) & 0x0f) | ((q3 << 4) & 0x30); 
-  rtn[5][0] = deq2[tmp][off];
-  q3 >>= 2;
-  rtn[5][1] = deq2[(q3 >> 0) & 0x3f][off];
-  rtn[6][0] = deq2[(q3 >> 6) & 0x3f][off];
-  rtn[6][1] = deq2[(q3 >> 12) & 0x3f][off];
-  rtn[7][0] = deq2[(q3 >> 18) & 0x3f][off];
-  rtn[7][1] = deq2[(q3 >> 24) & 0x3f][off];
-  return rtn;
-}
-
 // automatically recognize it in all cases. 
 template <int lut>
 __device__ inline int lop3(int a, int b, int c) {
@@ -189,10 +155,10 @@ __device__ inline FragB dequant_faster(int q) {
   // Guarantee that the `(a & b) | c` operations are LOP3s.
   int lo = lop3<(0xf0 & 0xcc) | 0xaa>(q, LO, EX);
   int hi = lop3<(0xf0 & 0xcc) | 0xaa>(q, HI, EX);
-  // We want signed int4 outputs, hence we fuse the `-8` symmetric zero point directly into `SUB` and `ADD`.
+  // We want signed int4 outputs, hence we fuse the `-4` symmetric zero point directly into `SUB` and `ADD`.
   const int SUB = 0x64046404;
   const int MUL = 0x30003000;
-  const int ADD = 0xd840d840;
+  const int ADD = 0xd820d820;
   FragB frag_b;
   frag_b[0] = __hsub2(
     *reinterpret_cast<half2*>(&lo),
@@ -460,8 +426,6 @@ __global__ void Marlin_3bit_faster(
   // Asynchronously fetch the next A, B and s tile from global to the next shared memory pipeline location.
   auto fetch_to_shared = [&] (int pipe, int a_off, bool pred = true) {
     if (pred) {
-      //if(threadIdx.x == 0 && blockIdx.x == 0)
-        //printf("here in share! \n");
       int4* sh_a_stage = sh_a + a_sh_stage * pipe;
       #pragma unroll
       for (int i = 0; i < a_sh_wr_iters; i++) {
@@ -531,55 +495,21 @@ __global__ void Marlin_3bit_faster(
     frag_b2_quant[k % 2] = sh_b2_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
   };
 
-  __shared__ half2 deq2[64][32];
-  int val = threadIdx.x / 32;
-  int off = threadIdx.x % 32;
-  half2 zero = __halves2half2(__int2half_ru(4),__int2half_ru(4));
-  for (; val < 64; val += threads / 32) {
-    deq2[val][off] = __halves2half2(
-       __int2half_rn(val & 0x7), __int2half_rn(val >> 3)
-    );
-    deq2[val][off] = __hsub2_rn(deq2[val][off],zero);
-  }
-
-  // Execute the actual tensor core matmul of a sub-tile. 
-  auto matmul = [&] (int k) {
-    // We have the m dimension as the inner loop in order to encourage overlapping dequantization and matmul operations.
-    unsigned int b_quant_0 = as_unsigned(frag_b1_quant[k % 2][0]);
-    unsigned int b_quant_1 = as_unsigned(frag_b1_quant[k % 2][1]);
-    unsigned int b_quant_2 = as_unsigned(frag_b2_quant[k % 2]);
-
-    FragB_8 frag_b = dequant(b_quant_0,b_quant_1,b_quant_2, deq2,off);
-    
-    #pragma unroll
-    for(int j = 0; j < 4; j++) {
-      // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-      if (group_blocks != -1) {
-        scale(frag_b[2*j], frag_s[k % 2][j], 0);
-        scale(frag_b[2*j+1], frag_s[k % 2][j], 1);
-      }
-
-      #pragma unroll
-      for (int i = 0; i < thread_m_blocks; i++) {
-        mma(frag_a[k % 2][i], frag_b[2*j], frag_c[i][j][0]);
-        mma(frag_a[k % 2][i], frag_b[2*j+1], frag_c[i][j][1]);
-      }
-    }
-  };
-
   // Execute the actual tensor core matmul of a sub-tile. 
   auto matmul_faster = [&] (int k) {
-    int b_quant_rest = (frag_b1_quant[k % 2][0] >> 12) | ((frag_b1_quant[k % 2][1] >> 8) & 0xf0)| ((frag_b2_quant[k % 2] >> 4) & 0xf00);
-    int b_quant_ptr[4] = {frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1],frag_b2_quant[k % 2],b_quant_rest}; 
+    int b_quant_ptr[3] = {frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1],frag_b2_quant[k % 2]}; 
+    //if (blockIdx.x == 0 && threadIdx.x==0) printf("quant : %x, %x, %x \n",frag_b1_quant[k % 2][0],frag_b1_quant[k % 2][1],frag_b2_quant[k % 2]);
+    int b_quant, b_quant_shift;
+    FragB frag_b0, frag_b1;
     #pragma unroll
-    for (int j = 0; j < 4; j++) {
-      int b_quant = b_quant_ptr[j];
-      int b_quant_shift = b_quant >> 6;
-      FragB frag_b0 = dequant_faster(b_quant);
+    for (int j = 0; j < 3; j++) {
+      b_quant = b_quant_ptr[j];
+      b_quant_shift = b_quant >> 6;
+      frag_b0 = dequant_faster(b_quant);
       // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
       if (group_blocks != -1)
         scale(frag_b0, frag_s[k % 2][j], 0);
-      FragB frag_b1 = dequant_faster(b_quant_shift);
+      frag_b1 = dequant_faster(b_quant_shift);
       if (group_blocks != -1)
         scale(frag_b1, frag_s[k % 2][j], 1);
         
@@ -588,9 +518,25 @@ __global__ void Marlin_3bit_faster(
         mma(frag_a[k % 2][i], frag_b0, frag_c[i][j][0]);
         mma(frag_a[k % 2][i], frag_b1, frag_c[i][j][1]);
       }
+
+      //if(blockIdx.x == 0 && threadIdx.x == 0) printf("%d,%x , %x, %x,%x, %x, %x \n:", j, b_quant, b_quant_shift,frag_b0[0],frag_b0[1],frag_b1[0],frag_b1[1]);    
     }
+    b_quant = ((frag_b1_quant[k % 2][0] & 0xf000f000) >> 12)| ((frag_b1_quant[k % 2][1] & 0xf000f000)>> 8)| ((frag_b2_quant[k % 2] & 0xf000f000)>> 4);
+    b_quant_shift = b_quant >> 6;
 
-
+    frag_b0 = dequant_faster(b_quant);
+      // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
+    if (group_blocks != -1)
+      scale(frag_b0, frag_s[k % 2][3], 0);
+    frag_b1 = dequant_faster(b_quant_shift);
+    if (group_blocks != -1)
+      scale(frag_b1, frag_s[k % 2][3], 1);
+    //if(blockIdx.x == 0 && threadIdx.x == 0) printf("3,%x , %x, %x,%x, %x, %x \n:", b_quant, b_quant_shift,frag_b0[0],frag_b0[1],frag_b1[0],frag_b1[1]);    
+    #pragma unroll
+    for (int i = 0; i < thread_m_blocks; i++) {
+      mma(frag_a[k % 2][i], frag_b0, frag_c[i][3][0]);
+      mma(frag_a[k % 2][i], frag_b1, frag_c[i][3][1]);
+    }
   };
 
 
@@ -777,20 +723,12 @@ __global__ void Marlin_3bit_faster(
       #pragma unroll
       for (int k = 0; k < b_sh_wr_iters; k++) {
         fetch_to_registers(k + 1, pipe % stages);
-        //if ( blockIdx.x == 0 && threadIdx.x == 0)
-          //printf("______________________________ \n pipe: %d; k : %d \n", pipe, k);
         if (k == b_sh_wr_iters - 2) {
-          //if(blockIdx.x == 0 && threadIdx.x == 0) printf("slice_iters %d, stages%d, \n",slice_iters, stages);
           fetch_to_shared((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
-          //fetch_to_shared_faster((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
           pipe++;
           wait_for_stage();
         }
-        //matmul(k);
-        //clock_t start = clock();
         matmul_faster(k);
-        //clock_t end = clock();
-        //if(blockIdx.x == 0 && threadIdx.x == 0) printf("%d \n",end - start);
       }
       slice_iters--;
       if (slice_iters == 0)

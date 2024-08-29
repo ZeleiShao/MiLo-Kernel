@@ -319,7 +319,6 @@ class Layer3bitFaster(nn.Module):
         maxq = 2 ** 3 - 1
         s = scales.t()
         w = linear.weight.data.t() # (in-features, out-features) (k, n)
-
         if self.groupsize != self.k:
             w = w.reshape((-1, self.groupsize, self.n)) # (k, n) -> (k/group_size, self.group_size, n)
             w = w.permute(1, 0, 2) #(self.group_size, k/group_size, n)
@@ -338,44 +337,33 @@ class Layer3bitFaster(nn.Module):
             s = s.reshape((-1, len(_scale_perm_single)))[:, _scale_perm_single]
         s = s.reshape((-1, self.n)).contiguous()
         w = w.reshape((self.k // tile, tile, self.n // tile, tile))
-
         w = w.permute((0, 2, 1, 3))
         w = w.reshape((self.k // tile, self.n * tile)) 
         res = w
         res = res.reshape((-1, _perm.numel()))[:, _perm].reshape(res.shape)
+        q1 = np.zeros((res.shape[0], 2 * res.shape[1]//32), dtype=np.uint32)
+        q2 = np.zeros((res.shape[0], res.shape[1]//32), dtype=np.uint32)
+        res = res.cpu().numpy().astype(np.uint32)
+        for j in range(4):
+            q1[:,0::2] |= res[:,j::32] << 3*j
+            q1[:,0::2] |= res[:,4 + j::32] << 16 + 3*j
+            q1[:,1::2] |= res[:,8 + j::32] << 3*j
+            q1[:,1::2] |= res[:,12 + j::32] << 16 + 3*j
+            q2 |= res[:,16 + j::32] << 3*j
+            q2 |= res[:,20 + j::32] << 16 + 3*j
+        q1[:,0::2] |= res[:,24::32] << 12
+        q1[:,0::2] |= res[:,28::32] << 28
+        q1[:,0::2] |= (res[:,25::32] & 0x1) << 15
+        q1[:,0::2] |= (res[:,29::32] & 0x1) << 31
+        q1[:,1::2] |= (res[:,25::32] & 0x6) << 11
+        q1[:,1::2] |= (res[:,26::32] & 0x3) << 14
+        q1[:,1::2] |= (res[:,29::32] & 0x6) << 27
+        q1[:,1::2] |= (res[:,30::32] & 0x3) << 30
+        q2 |= (res[:,26::32] & 0x4) << 10
+        q2 |= (res[:,30::32] & 0x4) << 26
+        q2 |= res[:,27::32]<< 13
+        q2 |= res[:,31::32]<< 29
 
-        # int3相比于int4的改动
-        # 这里先只考虑简单情况； 这种情况下的int3量化，每32个数视为一组，放入3个uint32中
-        assert res.shape[1] % 32 == 0 , "res.shape[1] % 32 != 0"   
-        qsize = res.shape[1]//32
-        q1 = np.zeros((res.shape[0], 2 * qsize), dtype=np.uint32)
-        q2 = np.zeros((res.shape[0], qsize), dtype=np.uint32)
-        res = res.cpu().numpy().astype(np.uint32)   
-        for i in range(0,qsize):
-            for j in range(4):
-                q1[:,2*i] |= res[:,32*i+j] << 6*j
-                q1[:,2*i ] |= res[:,32*i+j+4] << 6*j+3
-                q2[:,i ] |= res[:,32*i+j+24]<< 6 * j + 8
-                q2[:,i ] |= res[:,32*i+j+28]<< 6 * j + 11
-            q1[:,2*i] |= res[:,32*i+8]<< 24
-            q1[:,2*i ] |= res[:,32*i+12]<< 27
-            q1[:,2*i] |= res[:,32*i+9] << 30
-            q1[:,2*i+1] |= res[:,32*i+9]>> 2
-            q1[:,2*i+1] |= res[:,32*i+13] << 1
-            q1[:,2*i+1] |= res[:,32*i+10] << 4
-            q1[:,2*i+1] |= res[:,32*i+14] << 7
-            q1[:,2*i+1] |= res[:,32*i+11]<< 10
-            q1[:,2*i+1] |= res[:,32*i+15]<< 13
-            q1[:,2*i+1] |= res[:,32*i+18]<< 28
-            q1[:,2*i+1] |= res[:,32*i+22]<< 31
-            q1[:,2*i+1] |= res[:,32*i+16]<< 16
-            q1[:,2*i+1] |= res[:,32*i+20]<< 19
-            q1[:,2*i+1] |= res[:,32*i+17]<< 22
-            q1[:,2*i+1] |= res[:,32*i+21] << 25
-            q2[:,i] |= res[:,32*i+22] >> 1
-            q2[:,i] |= res[:,32*i+19]<< 2
-            q2[:,i] |= res[:,32*i+23]<< 5
-    
         q1 = torch.from_numpy(q1.astype(np.int32)).to(w.device)
         q2 = torch.from_numpy(q2.astype(np.int32)).to(w.device)
         self.B1[:, :] = q1.to(self.B1.device)

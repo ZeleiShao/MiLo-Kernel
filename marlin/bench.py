@@ -65,7 +65,7 @@ def gen_quant3(m, n, groupsize=-1):
     linear.weight.data = ref.t()
     # Workaround to test some special cases that are forbidden by the API
     #layer = marlin.Layer3bit(256, 256, groupsize=groupsize)
-    layer = marlin.Layer3bit(m, n, groupsize=groupsize)
+    layer = marlin.Layer3bitFaster(m, n, groupsize=groupsize)
     if groupsize == -1:
         groupsize = m
     layer.k = m
@@ -79,8 +79,6 @@ def gen_quant3(m, n, groupsize=-1):
     q2 = layer.B2
     s = layer.s
     return ref, q1, q2, s
-
-
 
 
 def benchmark_dense(A, B, C):
@@ -125,9 +123,9 @@ else:
     SMS = -1
 
 MODELS = {
-    #'ideal': [
-    #    (4 * 256 * SMS, 256 * SMS)
-    #],
+    'ideal': [
+        (4 * 256 * SMS, 256 * SMS)
+    ],
     'Llama7B': [
         (4096, 3 * 4096),
         (4096, 4096),
