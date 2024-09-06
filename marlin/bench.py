@@ -34,6 +34,18 @@ def get_problem(m, n, k, groupsize=-1):
     torch.cuda.synchronize()
     return A, B, C, B_ref, s
 
+def get_problem_int3(m, n, k, groupsize=-1):
+    if groupsize == -1:
+        groupsize = k
+    dev = torch.device('cuda:0')
+    A = torch.randn((m, k), dtype=torch.half, device=dev)
+    B1 = torch.randint(low=-2**31, high=2**31, size=(k * n // 16,), device=dev)
+    B2 = torch.randint(low=-2**31, high=2**31, size=(k * n // 32,), device=dev)
+    B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
+    C = torch.zeros((m, n), dtype=torch.half, device=dev)
+    s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
+    torch.cuda.synchronize()
+    return A, B1, B2, C, B_ref, s
 
 def gen_quant3(m, n, groupsize=-1):
     maxq = 2 ** 3 - 1
@@ -123,9 +135,9 @@ else:
     SMS = -1
 
 MODELS = {
-    'ideal': [
-        (4 * 256 * SMS, 256 * SMS)
-    ],
+    #'ideal': [
+    #    (4 * 256 * SMS, 256 * SMS)
+    #],
     'Llama7B': [
         (4096, 3 * 4096),
         (4096, 4096),
@@ -178,15 +190,16 @@ for groupsize in [-1, 128] if ALL else [128]:
             for layer in layers:
                 A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
                 B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
-                #A, B, C, B_ref, s = get_problem(layer[0], layer[1], groupsize)
+                #A, B1, B2, C, B_ref, s = get_problem_int3(batch, layer[0], layer[1], groupsize)
                 C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
                 #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
-                res_q = benchmark_quant(A, B1, B2, C, s, 64, 256, SMS)
+                    #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
                 #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
                 #else:
-                    #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
+                #res_q = benchmark_quant_4bit(A, B, C, s, -1, -1, SMS)
+                res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
                 res_q['speedup'] = res_d['s'] / res_q['s']
                 tot_q['s'] += res_q['s']
                 for k in tot_q:

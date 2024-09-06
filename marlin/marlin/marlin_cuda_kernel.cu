@@ -452,7 +452,6 @@ __global__ void Marlin(
       FragB frag_b1 = dequant(b_quant_shift);
       if (group_blocks != -1)
         scale(frag_b1, frag_s[k % 2][j], 1);
-        
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
         mma(frag_a[k % 2][i], frag_b0, frag_c[i][j][0]);
@@ -589,10 +588,7 @@ __global__ void Marlin(
     auto write = [&] (int idx, float c0, float c1, FragS& s) {
       half2 res = __halves2half2(__float2half(c0), __float2half(c1));
       if (group_blocks == -1) // for per-column quantization we finally apply the scale here
-      {
         res = __hmul2(res, s[0]);
-      }
-        
       ((half2*) sh)[idx] = res;
     };
     if (threadIdx.x / 32 < thread_n_blocks / 4) {
@@ -824,46 +820,3 @@ int marlin_cuda(
 
 
 #endif
-/*
-int main(){
-
-  const int m = 16;
-  const int k = 256;
-  const int n = 256;
-  int A[m][k];
-  for(int i=0;i<m;++i){
-    for(int j=0;j<k;++j){
-        A[i][j] = 0;
-    }
-  }
-  int B[k/16][18*n/8];
-  for(int i=0;i<k/16;++i){
-    for(int j=0;j<2*n/32;++j){
-        B1[i][j] = 0;
-    }
-  }
-  int C[n][k];
-  for(int i=0;i<n;++i){
-    for(int j=0;j<k;++j){
-        C[i][j] = 0;
-    }
-  }
-  int s[n];  
-  for (int i=0;i < n; ++i){
-    s[i] = 1;
-  }
-
-
-  int workspace[n /128 * 16];
-  int res = marlin_cuda_3bit(
-  A,
-  B1,
-  B2,
-  C,
-  s,
-  m,
-  n,
-  k,
-  workspace);
-  return res;
-}*/

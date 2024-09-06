@@ -16,8 +16,8 @@ setup(
         'marlin_cuda', ['marlin/marlin_cuda.cpp','marlin/marlin_cuda_kernel.cu', 'marlin/marlin_3bit_cuda_kernel.cu','marlin/marlin_3bit_cuda_kernel_faster.cu']
     )],
     extra_compile_args={
-        'gcc': ['-g', '-O3'],
-        'nvcc': ['-G', '-g', '-O3', '-lineinfo', '-arch=sm_80']
+        'gcc': ['-g', '-O0'],
+        'nvcc': ['-G', '-g', '-O0', '-lineinfo', '-arch=sm_80']
     },
     extra_link_args=['-lcudart'],
     cmdclass={'build_ext': cpp_extension.BuildExtension},

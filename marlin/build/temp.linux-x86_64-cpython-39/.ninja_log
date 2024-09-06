@@ -1,0 +1,24 @@
+# ninja log v5
+1	12978	1725229897452855710	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel.o	d6fe8b930a9e322e
+2	13649	1725229898149554951	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+13649	20681	1725229905181303785	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_cuda_kernel.o	6acc27a1acf7cfd9
+12995	39199	1725229923691730773	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_cuda.o	1670795c9416fe6b
+1059	7938	1725239239499582341	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+1056	8307	1725239888080552470	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+968	7990	1725240426655269139	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+1330	8620	1725240534516866824	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+946	7985	1725240945817387537	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+16	7661	1725242175990384002	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+1033	8712	1725242251626652589	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+1538	9438	1725287392729428865	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+26	7520	1725287449458489802	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+967	8419	1725287619396260142	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+945	8406	1725287968175006144	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+928	8377	1725288277202673773	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+16	7456	1725288328718050523	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+944	8401	1725288462050103613	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+907	9595	1725401485154953389	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+1426	11232	1725425359755244294	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+941	9255	1725426913089602722	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+1072	9171	1725586227787997519	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
+909	8238	1725586749987486209	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o	23a9b9d1359c4aef
