@@ -1,258 +1,405 @@
-faster : threadIdx: 160, i: 0, off: 64, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 161, i: 0, off: 65, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 162, i: 0, off: 66, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 163, i: 0, off: 67, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 164, i: 0, off: 68, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 165, i: 0, off: 69, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 166, i: 0, off: 70, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 167, i: 0, off: 71, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 168, i: 0, off: 72, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 169, i: 0, off: 73, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 170, i: 0, off: 74, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 171, i: 0, off: 75, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 172, i: 0, off: 76, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 173, i: 0, off: 77, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 174, i: 0, off: 78, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 175, i: 0, off: 79, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 176, i: 0, off: 80, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 177, i: 0, off: 81, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 178, i: 0, off: 82, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 179, i: 0, off: 83, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 180, i: 0, off: 84, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 181, i: 0, off: 85, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 182, i: 0, off: 86, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 183, i: 0, off: 87, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 184, i: 0, off: 88, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 185, i: 0, off: 89, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 186, i: 0, off: 90, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 187, i: 0, off: 91, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 188, i: 0, off: 92, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 189, i: 0, off: 93, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 190, i: 0, off: 94, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 191, i: 0, off: 95, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 32, i: 0, off: 0, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 33, i: 0, off: 1, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 34, i: 0, off: 2, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 35, i: 0, off: 3, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 36, i: 0, off: 4, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 37, i: 0, off: 5, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 38, i: 0, off: 6, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 39, i: 0, off: 7, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 40, i: 0, off: 8, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 41, i: 0, off: 9, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 42, i: 0, off: 10, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 43, i: 0, off: 11, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 44, i: 0, off: 12, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 45, i: 0, off: 13, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 46, i: 0, off: 14, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 47, i: 0, off: 15, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 48, i: 0, off: 16, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 49, i: 0, off: 17, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 50, i: 0, off: 18, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 51, i: 0, off: 19, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 52, i: 0, off: 20, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 53, i: 0, off: 21, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 54, i: 0, off: 22, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 55, i: 0, off: 23, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 56, i: 0, off: 24, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 57, i: 0, off: 25, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 58, i: 0, off: 26, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 59, i: 0, off: 27, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 60, i: 0, off: 28, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 61, i: 0, off: 29, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 62, i: 0, off: 30, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 63, i: 0, off: 31, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 160, i: 1, off: 192, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 161, i: 1, off: 193, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 162, i: 1, off: 194, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 163, i: 1, off: 195, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 164, i: 1, off: 196, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 165, i: 1, off: 197, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 166, i: 1, off: 198, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 167, i: 1, off: 199, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 168, i: 1, off: 200, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 169, i: 1, off: 201, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 170, i: 1, off: 202, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 171, i: 1, off: 203, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 172, i: 1, off: 204, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 173, i: 1, off: 205, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 174, i: 1, off: 206, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 175, i: 1, off: 207, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 176, i: 1, off: 208, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 177, i: 1, off: 209, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 178, i: 1, off: 210, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 179, i: 1, off: 211, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 180, i: 1, off: 212, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 181, i: 1, off: 213, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 182, i: 1, off: 214, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 183, i: 1, off: 215, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 184, i: 1, off: 216, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 185, i: 1, off: 217, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 186, i: 1, off: 218, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 187, i: 1, off: 219, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 188, i: 1, off: 220, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 189, i: 1, off: 221, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 190, i: 1, off: 222, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 191, i: 1, off: 223, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 32, i: 1, off: 128, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 33, i: 1, off: 129, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 34, i: 1, off: 130, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 35, i: 1, off: 131, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 36, i: 1, off: 132, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 37, i: 1, off: 133, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 38, i: 1, off: 134, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 39, i: 1, off: 135, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 40, i: 1, off: 136, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 41, i: 1, off: 137, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 42, i: 1, off: 138, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 43, i: 1, off: 139, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 44, i: 1, off: 140, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 45, i: 1, off: 141, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 46, i: 1, off: 142, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 47, i: 1, off: 143, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 48, i: 1, off: 144, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 49, i: 1, off: 145, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 50, i: 1, off: 146, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 51, i: 1, off: 147, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 52, i: 1, off: 148, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 53, i: 1, off: 149, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 54, i: 1, off: 150, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 55, i: 1, off: 151, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 56, i: 1, off: 152, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 57, i: 1, off: 153, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 58, i: 1, off: 154, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 59, i: 1, off: 155, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 60, i: 1, off: 156, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 61, i: 1, off: 157, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 62, i: 1, off: 158, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-faster : threadIdx: 63, i: 1, off: 159, b_gl_rd_delta_i : 0, b_sh_stride : 512,  b_gl_stride: 128, b_gl_rd_delta_o : 256, slice_col: 1024, slice_row : 0 
-sh_off : 32, off : 0 
-sh_off : 33, off : 0 
-sh_off : 34, off : 0 
-sh_off : 35, off : 0 
-sh_off : 36, off : 0 
-sh_off : 37, off : 0 
-sh_off : 38, off : 0 
-sh_off : 39, off : 0 
-sh_off : 40, off : 0 
-sh_off : 41, off : 0 
-sh_off : 42, off : 0 
-sh_off : 43, off : 0 
-sh_off : 44, off : 0 
-sh_off : 45, off : 0 
-sh_off : 46, off : 0 
-sh_off : 47, off : 0 
-sh_off : 48, off : 0 
-sh_off : 49, off : 0 
-sh_off : 50, off : 0 
-sh_off : 51, off : 0 
-sh_off : 52, off : 0 
-sh_off : 53, off : 0 
-sh_off : 54, off : 0 
-sh_off : 55, off : 0 
-sh_off : 56, off : 0 
-sh_off : 57, off : 0 
-sh_off : 58, off : 0 
-sh_off : 59, off : 0 
-sh_off : 60, off : 0 
-sh_off : 61, off : 0 
-sh_off : 62, off : 0 
-sh_off : 63, off : 0 
-sh_off : 0, off : 0 
-sh_off : 1, off : 0 
-sh_off : 2, off : 0 
-sh_off : 3, off : 0 
-sh_off : 4, off : 0 
-sh_off : 5, off : 0 
-sh_off : 6, off : 0 
-sh_off : 7, off : 0 
-sh_off : 8, off : 0 
-sh_off : 9, off : 0 
-sh_off : 10, off : 0 
-sh_off : 11, off : 0 
-sh_off : 12, off : 0 
-sh_off : 13, off : 0 
-sh_off : 14, off : 0 
-sh_off : 15, off : 0 
-sh_off : 16, off : 0 
-sh_off : 17, off : 0 
-sh_off : 18, off : 0 
-sh_off : 19, off : 0 
-sh_off : 20, off : 0 
-sh_off : 21, off : 0 
-sh_off : 22, off : 0 
-sh_off : 23, off : 0 
-sh_off : 24, off : 0 
-sh_off : 25, off : 0 
-sh_off : 26, off : 0 
-sh_off : 27, off : 0 
-sh_off : 28, off : 0 
-sh_off : 29, off : 0 
-sh_off : 30, off : 0 
-sh_off : 31, off : 0 
-sh_off : 96, off : 0 
-sh_off : 97, off : 0 
-sh_off : 98, off : 0 
-sh_off : 99, off : 0 
-sh_off : 100, off : 0 
-sh_off : 101, off : 0 
-sh_off : 102, off : 0 
-sh_off : 103, off : 0 
-sh_off : 104, off : 0 
-sh_off : 105, off : 0 
-sh_off : 106, off : 0 
-sh_off : 107, off : 0 
-sh_off : 108, off : 0 
-sh_off : 109, off : 0 
-sh_off : 110, off : 0 
-sh_off : 111, off : 0 
-sh_off : 112, off : 0 
-sh_off : 113, off : 0 
-sh_off : 114, off : 0 
-sh_off : 115, off : 0 
-sh_off : 116, off : 0 
-sh_off : 117, off : 0 
-sh_off : 118, off : 0 
-sh_off : 119, off : 0 
-sh_off : 120, off : 0 
-sh_off : 121, off : 0 
-sh_off : 122, off : 0 
-sh_off : 123, off : 0 
-sh_off : 124, off : 0 
-sh_off : 125, off : 0 
-sh_off : 126, off : 0 
-sh_off : 127, off : 0 
-sh_off : 64, off : 0 
-sh_off : 65, off : 0 
-sh_off : 66, off : 0 
-sh_off : 67, off : 0 
-sh_off : 68, off : 0 
-sh_off : 69, off : 0 
-sh_off : 70, off : 0 
-sh_off : 71, off : 0 
-sh_off : 72, off : 0 
-sh_off : 73, off : 0 
-sh_off : 74, off : 0 
-sh_off : 75, off : 0 
-sh_off : 76, off : 0 
-sh_off : 77, off : 0 
-sh_off : 78, off : 0 
-sh_off : 79, off : 0 
-sh_off : 80, off : 0 
-sh_off : 81, off : 0 
-sh_off : 82, off : 0 
-sh_off : 83, off : 0 
-sh_off : 84, off : 0 
-sh_off : 85, off : 0 
-sh_off : 86, off : 0 
-sh_off : 87, off : 0 
-sh_off : 88, off : 0 
-sh_off : 89, off : 0 
-sh_off : 90, off : 0 
-sh_off : 91, off : 0 
-sh_off : 92, off : 0 
-sh_off : 93, off : 0 
-sh_off : 94, off : 0 
-sh_off : 95, off : 0 
-test_tiles
-   16    512   1024   64  256   -1
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+2, 0
+2, 0
+3, 0
+3, 0
+0, 0
+0, 0
+1, 0
+1, 0
+   16  43520   8192   64  256   -1

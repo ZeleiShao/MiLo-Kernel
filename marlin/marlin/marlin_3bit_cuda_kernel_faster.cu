@@ -216,10 +216,7 @@ __global__ void Marlin_3bit_faster(
   // While this kind of partitioning makes things somewhat more complicated, it ensures good utilization of all SMs
   // for many kinds of shape and GPU configurations, while requiring as few slow global cross-threadblock reductions as 
   // possible.
-  
   // For larger GEMMs we run multiple batchsize 64 versions in parallel for a better partitioning with less reductions
-  //if( threadIdx.x == 0 & blockIdx.x == 0)
-  //  printf("get s: %d, get s: %d, get s: %d, get s: %d", ((int*)s)[0], ((int*)s)[1], ((int*)s)[2], ((int*)s)[3]);
 
   int parallel = 1;
   if (prob_m > 16 * thread_m_blocks) {
@@ -388,11 +385,6 @@ __global__ void Marlin_3bit_faster(
   }; 
   
 
-//  int b_gl_rd = b_gl_stride * ((threadIdx.x - 32 * ((1 + pipe) % 2 ))/ b_sh_stride) + ((threadIdx.x - 32 * ((1 + pipe) % 2)) % b_sh_stride);
-//  int b_gl_rd = b_sh_stride * slice_col + b_gl_rd_delta_o * slice_row;
-//  int b_gl_rd_2 = b_gl_stride * ((threadIdx.x-32 * pipe) / b_sh_stride) + ((threadIdx.x-32 * pipe)% b_sh_stride);
- // int b_gl_rd_2 = b_gl_rd;
-
   extern __shared__ int4 sh[];
   // Shared memory storage for global fetch pipelines. 
   int4* sh_a = sh;
@@ -467,13 +459,13 @@ __global__ void Marlin_3bit_faster(
       }     
       int4* sh_b1_stage = sh_b1 + (b_sh_stage/2) * pipe;
       int4* sh_b2_stage = sh_b2 + (b_sh_stage/4) * pipe;    
-      bool B2_sh_wr_pred = (b_sh_wr / 32) % 4 == pipe;
-      bool B1_sh_wr_pred = (b_sh_wr / 32 + pipe) % 2;
-      int b1_sh_wr = (b_sh_wr / 64) * 32 + (b_sh_wr - 32 * ((1 + pipe) % 2)) % 64;
-      int b2_sh_wr = (b_sh_wr / 128) * 32 + ((b_sh_wr - 32 * pipe) % 128);
-      bool B_sh_wr_pred = B1_sh_wr_pred || B2_sh_wr_pred;
-      b_gl_rd += b_gl_stride * ((threadIdx.x - 32 * ((1 + pipe) % 2 ))/ b_sh_stride) + ((threadIdx.x - 32 * ((1 + pipe) % 2)) % b_sh_stride);
-      b_gl_rd_2 += b_gl_stride * ((threadIdx.x-32 * pipe) / b_sh_stride) + ((threadIdx.x-32 * pipe)% b_sh_stride);
+      //bool B2_sh_wr_pred = (b_sh_wr / 32) % 4 == pipe;
+      //bool B1_sh_wr_pred = (b_sh_wr / 32 + pipe) % 2;
+      //int b1_sh_wr = (b_sh_wr / 64) * 32 + (b_sh_wr - 32 * ((1 + pipe) % 2)) % 64;
+      //int b2_sh_wr = (b_sh_wr / 128) * 32 + ((b_sh_wr - 32 * pipe) % 128);
+      //bool B_sh_wr_pred = B1_sh_wr_pred || B2_sh_wr_pred;
+      //b_gl_rd += b_gl_stride * ((threadIdx.x - 32 * ((1 + pipe) % 2 ))/ b_sh_stride) + ((threadIdx.x - 32 * ((1 + pipe) % 2)) % b_sh_stride);
+      //b_gl_rd_2 += b_gl_stride * ((threadIdx.x-32 * pipe) / b_sh_stride) + ((threadIdx.x-32 * pipe)% b_sh_stride);
       #pragma unroll
       for (int i = 0; i < b_sh_wr_iters; i++) {
         int4* share_B = sh_b1_stage;
@@ -740,12 +732,12 @@ __global__ void Marlin_3bit_faster(
     a_gl_rd += a_gl_rd_delta_o * (stages - 1);
   };
   start_pipes();
-  int register_time = 0, share_time = 0, mma_time = 0;
+  //int compute = 0, reduce = 0;
   // Main loop.
   while (slice_iters) {
     // We unroll over both the global fetch and the register load pipeline to ensure all shared memory accesses are
     // static. Note that both pipelines have even length meaning that the next iteration will always start at index 0.
-    //if(blockIdx.x == 0 && threadIdx.x == 0) printf("main loop \n");
+   //clock_t start1 = clock();
     #pragma unroll
     for (int pipe = 0; pipe < stages;) {
       #pragma unroll
@@ -772,7 +764,7 @@ __global__ void Marlin_3bit_faster(
         break;
     }
     a_gl_rd += a_gl_rd_delta_o * stages;
-    
+    //clock_t end1 = clock();
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
     // readable, other ways of writing the loop seemed to noticeably worse performance after compliation.
     if (slice_iters == 0) {
@@ -833,7 +825,12 @@ __global__ void Marlin_3bit_faster(
         start_pipes();
       }
     }
+    //clock_t end2 = clock();
+    //compute += end1-start1;
+    //reduce += end2-end1;
   }
+  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("compute time : %d, reduce_time: %d \n",compute,reduce);
+
 }
 
 
@@ -934,8 +931,6 @@ int marlin_cuda_3bit_faster(
     // For compilation speed, we only define the kernel configurations that have seemed useful (in terms of performance)
     // in our testing, however many more are, in principle, possible.
     if (false) {}
-    //CALL_IF(1,  8,  8, -1)
-    //CALL_IF(1,  8,  8,  8)
     CALL_IF(1, 16,  4, -1)
     CALL_IF(1, 16,  4,  8)
     CALL_IF(2, 16,  4, -1)
@@ -955,4 +950,3 @@ int marlin_cuda_3bit_faster(
 }
 
 #endif
-

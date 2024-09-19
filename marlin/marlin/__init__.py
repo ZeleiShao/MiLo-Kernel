@@ -63,7 +63,6 @@ def mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k=-1, thread_n=-1, sms=-1
 
 
 # Precompute permutations for Marlin weight and scale shuffling 
-
 def _get_perms():
     perm = []
     for i in range(32): # 32 threads in a warp

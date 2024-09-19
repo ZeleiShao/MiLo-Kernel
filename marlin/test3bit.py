@@ -175,7 +175,6 @@ class Test(unittest.TestCase):
         for m in [16]:
             for groupsize in [128]:
                 for n, k in [(256, 512), (256, 1024), (256 * 128, 1024)]:
-                    #for thread_shape in [(128, 128), (64, 256)]:
                     for thread_shape in [(64, 256)]:
                         self.run_problem(m, n, k, *thread_shape, groupsize)
 

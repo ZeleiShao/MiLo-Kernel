@@ -84,7 +84,7 @@ class Test(unittest.TestCase):
         #self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
     
     def test_tiles(self):
-        self.run_problem(16, 2 * 21760,8192, 64, 256)
+        self.run_problem(16,14336, 4096, 64, 256)
     
 if __name__ == '__main__':
     unittest.main()

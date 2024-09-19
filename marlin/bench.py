@@ -135,44 +135,26 @@ else:
     SMS = -1
 
 MODELS = {
-    #'ideal': [
-    #    (4 * 256 * SMS, 256 * SMS)
-    #],
-    'Llama7B': [
-        (4096, 3 * 4096),
-        (4096, 4096),
-        (4096, 2 * 10752),
-        (10752, 4096)
-    ],
-    'Llama13B': [
-        (5120, 3 * 5120),
-        (5120, 5120),
-        (5120, 2 * 13568),
-        (13568, 5120)
-    ],
-    'Llama33B': [
-        (6656, 3 * 6656),
-        (6656, 6656),
-        (6656, 2 * 17664),
-        (17664, 6656)
-    ],
-    'Llama65B': [
-        (8192, 3 * 8192),
-        (8192, 8192),
-        (8192, 2 * 21760),
-        (21760, 8192)
-    ],
-    'Falcon180B': [
-        # Note that parallel attention and FC allows layer fusions
-        (14848, 14848 * 5 + 1024),
-        (14848 * 5, 14848)
-    ]
+ #   'ideal': [
+  #      (4 * 256 * SMS, 256 * SMS)
+   # ],
+   'w1': [(4096, 14336)], #n,k
+   'w2' : [(14336, 4096)]
+ 
 }
 
 # Set to true in order to run a more complete benchmark sweep; the default is reproduce README experiments
 ALL = False
+"""batch = 16
+tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0} 
+#A, B1, B2, C, B_ref, s = get_problem_int3(16,4096, 14336,128)
+A, B1, B2, C, B_ref, s = get_problem_int3(16, 4096,1024,128)
+res_q = benchmark_quant(A, B1, B2, C, s, 64, 256,108)
+res_d = benchmark_dense(A, B_ref, C)
+res_q['speedup'] = res_d['s'] / res_q['s']
+print(res_q['speedup'])
+#for groupsize in [-1, 128] if ALL else [128]:"""
 
-#for groupsize in [-1, 128] if ALL else [128]:
 for groupsize in [-1, 128] if ALL else [128]:
     print('groupsize=%d' % groupsize)
     print()
@@ -188,23 +170,25 @@ for groupsize in [-1, 128] if ALL else [128]:
                 continue
             tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0} 
             for layer in layers:
-                A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
-                B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
-                #A, B1, B2, C, B_ref, s = get_problem_int3(batch, layer[0], layer[1], groupsize)
-                C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
+                #A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
+                #B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
+                A, B1, B2, C, B_ref, s = get_problem_int3(batch, layer[0], layer[1], groupsize)
+                #C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
                 #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
                     #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
-                #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
+                res_q = benchmark_quant(A, B1,B2, C, s, 64, 256, SMS)
                 #else:
                 #res_q = benchmark_quant_4bit(A, B, C, s, -1, -1, SMS)
-                res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
+                #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
+                
                 res_q['speedup'] = res_d['s'] / res_q['s']
                 tot_q['s'] += res_q['s']
                 for k in tot_q:
                     if k != 's':
                         tot_q[k] += res_q[k] * res_q['s']
+                        
             for k in tot_q:
                 if k != 's':
                     tot_q[k] /= tot_q['s']
