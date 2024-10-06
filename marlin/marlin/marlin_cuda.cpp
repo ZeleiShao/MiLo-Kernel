@@ -167,6 +167,7 @@ void mul_3bit(
     max_par
   );
   if (err == ERR_PROB_SHAPE) {
+    printf("groupsize : %d", groupsize);
     AT_ERROR(
       "Problem (m=", prob_m, ", n=", prob_n, ", k=", prob_k, ")",
       " not compatible with thread_k=", thread_k, ", thread_n=", thread_n, "."
@@ -196,8 +197,10 @@ void mul_3bit_faster(
   int groupsize = (s.size(0) == 1) ? -1 : prob_k / s.size(0);
   if (groupsize != -1 && groupsize * s.size(0) != prob_k)
     AT_ERROR("k=", prob_k, " not compatible with ", s.size(0), " groups.");
-  if (workspace.numel() < prob_n / 128 * max_par)
+  if (workspace.numel() < prob_n / 128 * max_par){
     AT_ERROR("workspace must be of size at least ", prob_n / 128 * max_par, ".");
+  }
+    
   int dev = A.get_device();
   int err = marlin_cuda_3bit_faster(
     A.data_ptr(),

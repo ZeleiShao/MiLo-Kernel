@@ -34,7 +34,7 @@ def get_problem(m, n, k, groupsize=-1):
     torch.cuda.synchronize()
     return A, B, C, B_ref, s
 
-def get_problem_int3(m, n, k, groupsize=-1):
+def get_problem_int3(m, n, k, groupsize=64):
     if groupsize == -1:
         groupsize = k
     dev = torch.device('cuda:0')
@@ -102,9 +102,9 @@ def benchmark_dense(A, B, C):
     }
 
 def benchmark_quant(A, B1, B2, C, s, thread_k, thread_n, sms):
-    workspace = torch.zeros(C.shape[1] // 128 * 16, device=torch.device('cuda:0'))
+    workspace = torch.zeros((C.shape[1] // 128) * 16, device=torch.device('cuda:0'))
     #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
-    res = benchmark(lambda: marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
+    res = benchmark(lambda: marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, sms,16))
     return {
         's': res,
         'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
@@ -114,7 +114,7 @@ def benchmark_quant(A, B1, B2, C, s, thread_k, thread_n, sms):
 def benchmark_quant_4bit(A, B, C, s, thread_k, thread_n, sms):
     workspace = torch.zeros(C.shape[1] // 128 * 16, device=torch.device('cuda:0'))
     #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
-    res = benchmark(lambda: marlin.mul(A, B, C, s, workspace, thread_k, thread_n, sms))
+    res = benchmark(lambda: marlin.mul(A, B, C, s, workspace, thread_k, thread_n, sms, 64))
     return {
         's': res,
         'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
@@ -138,9 +138,14 @@ MODELS = {
  #   'ideal': [
   #      (4 * 256 * SMS, 256 * SMS)
    # ],
-   'w1': [(4096, 14336)], #n,k
-   'w2' : [(14336, 4096)]
- 
+'w1' : [(4096, 14336)],
+'w2' : [(14336, 4096)],
+#'mixtual' : [(4096, 14336),(14336, 4096),(4096, 14336)],
+
+#'Falcon180B': [
+#       (14848, 14848 * 5 + 1024),
+ #      (14848 * 5, 14848)
+  # ]
 }
 
 # Set to true in order to run a more complete benchmark sweep; the default is reproduce README experiments
@@ -155,7 +160,7 @@ res_q['speedup'] = res_d['s'] / res_q['s']
 print(res_q['speedup'])
 #for groupsize in [-1, 128] if ALL else [128]:"""
 
-for groupsize in [-1, 128] if ALL else [128]:
+for groupsize in [64] :
     print('groupsize=%d' % groupsize)
     print()
     dev = torch.device('cuda:0')
@@ -172,13 +177,13 @@ for groupsize in [-1, 128] if ALL else [128]:
             for layer in layers:
                 #A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
                 #B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
-                A, B1, B2, C, B_ref, s = get_problem_int3(batch, layer[0], layer[1], groupsize)
+                A, B1, B2, C, B_ref, s = get_problem_int3(batch, layer[1], layer[0], groupsize)
                 #C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
                 #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
                     #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
-                res_q = benchmark_quant(A, B1,B2, C, s, 64, 256, SMS)
+                res_q = benchmark_quant(A, B1, B2, C, s,64, 256, SMS)
                 #else:
                 #res_q = benchmark_quant_4bit(A, B, C, s, -1, -1, SMS)
                 #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)

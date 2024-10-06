@@ -104,8 +104,8 @@ class Layer(nn.Module):
         @groupsize: quantization groupsize (must be -1 or 128)
         """
         super().__init__()
-        if groupsize not in [-1, 128]:
-            raise ValueError('Only groupsize -1 and 128 are supported.')
+        #if groupsize not in [-1, 128]:
+        #    raise ValueError('Only groupsize -1 and 128 are supported.')
         if infeatures % 128 != 0 or outfeatures % 256 != 0:
             raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
         if groupsize == -1:
@@ -176,11 +176,11 @@ class Layer3bit(nn.Module):
         @groupsize: quantization groupsize (must be -1 or 128)
         """
         super().__init__()
-        if groupsize not in [-1, 128]:
-            raise ValueError('Only groupsize -1 and 128 are supported.')
+        #if groupsize not in [-1, 128]:
+        #    raise ValueError('Only groupsize -1 and 128 are supported.')
         #print("infeature: %d, outfeature: %d" % (infeatures, outfeatures))
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        #if infeatures % 128 != 0 or outfeatures % 256 != 0:
+        #    raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
         if groupsize == -1:
             groupsize = infeatures
         if infeatures % groupsize != 0:
@@ -277,20 +277,20 @@ class Layer3bit(nn.Module):
 class Layer3bitFaster(nn.Module):
     """PyTorch compatible Marlin layer; 3-bit (symmetric grouped) linear layer without bias."""
 
-    def __init__(self, infeatures, outfeatures, groupsize=-1):
+    def __init__(self, infeatures, outfeatures, groupsize=64):
         """Create an empty Marlin layer.
         @infeatures: number of input features (must be divisible by 128)
         @outfeatures: number of output features (must be divisible by 256)
         @groupsize: quantization groupsize (must be -1 or 128)
         """
         super().__init__()
-        if groupsize not in [-1, 128]:
-            raise ValueError('Only groupsize -1 and 128 are supported.')
+        if groupsize == -1:
+            groupsize = 64
+        if groupsize != 64 :
+            raise ValueError('Only groupsize 64 are supported.')
         #print("infeature: %d, outfeature: %d" % (infeatures, outfeatures))
         if infeatures % 128 != 0 or outfeatures % 256 != 0:
             raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
-        if groupsize == -1:
-            groupsize = infeatures
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures

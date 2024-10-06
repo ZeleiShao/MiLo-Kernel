@@ -18,7 +18,6 @@
 #ifndef MARLIN_CUDA_KERNEL_CUH
 #define MARLIN_CUDA_KERNEL_CUH
 
-
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
@@ -45,7 +44,6 @@ struct Vec {
   }
 };
 
-
 // Matrix fragments for tensor core instructions; their precise layout is documented here: 
 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
 using FragA = Vec<half2, 4>;
@@ -57,7 +55,6 @@ using I2_2 = Vec<I2,2>;
 // Predicated asynchronous global->shared copy; used for inputs A where we apply predication to handle batchsizes that
 // are not multiples of 16.
 __device__ inline void cp_async4_pred(void* smem_ptr, const void* glob_ptr, bool pred = true) {
-  
   const int BYTES = 16;
   uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
   asm volatile(
@@ -67,7 +64,6 @@ __device__ inline void cp_async4_pred(void* smem_ptr, const void* glob_ptr, bool
     "   @p cp.async.cg.shared.global [%1], [%2], %3;\n"
     "}\n" :: "r"((int) pred), "r"(smem), "l"(glob_ptr), "n"(BYTES)
   );
-  
 }
 
 // Asynchronous global->shared copy with a cache hint indicating that the values may be evicted immediately; used for
@@ -154,7 +150,6 @@ __device__ inline FragB dequant_faster(int& q) {
   return frag_b;
 }
 
-
 // Multiply dequantized values by the corresponding quantization scale; used only for grouped quantization.
 __device__ inline void scale(FragB& frag_b, FragS& frag_s, int i) {
   half2 s = __half2half2(reinterpret_cast<__half*>(&frag_s)[i]);
@@ -195,7 +190,7 @@ template <
   const int thread_n_blocks, // same for n dimension (output) 
   const int thread_k_blocks, // same for k dimension (reduction)
   const int stages, // number of stages for the async global->shared fetch pipeline
-  const int group_blocks = -1 // number of consecutive 16x16 blocks with a separate quantization scale
+  const int group_blocks = 4 // number of consecutive 16x16 blocks with a separate quantization scale
 >
 __global__ void Marlin_3bit_faster(
   const int4* __restrict__ A, // fp16 input matrix of shape mxk 
@@ -216,7 +211,10 @@ __global__ void Marlin_3bit_faster(
   // While this kind of partitioning makes things somewhat more complicated, it ensures good utilization of all SMs
   // for many kinds of shape and GPU configurations, while requiring as few slow global cross-threadblock reductions as 
   // possible.
+  
   // For larger GEMMs we run multiple batchsize 64 versions in parallel for a better partitioning with less reductions
+  //if( threadIdx.x == 0 & blockIdx.x == 0)
+  //  printf("get s: %d, get s: %d, get s: %d, get s: %d", ((int*)s)[0], ((int*)s)[1], ((int*)s)[2], ((int*)s)[3]);
 
   int parallel = 1;
   if (prob_m > 16 * thread_m_blocks) {
@@ -229,8 +227,8 @@ __global__ void Marlin_3bit_faster(
   int iters = ceildiv(k_tiles * n_tiles * parallel, gridDim.x);
   // Ensure that the number of tiles in each stripe is a multiple of the groupsize; this avoids an annoying special case
   // where a stripe starts in the middle of group.
-  if (group_blocks != -1)
-    iters = (group_blocks / thread_k_blocks) * ceildiv(iters, (group_blocks / thread_k_blocks));
+  //if (group_blocks != -1)
+  //  iters = (group_blocks / thread_k_blocks) * ceildiv(iters, (group_blocks / thread_k_blocks));
 
   int slice_row = (iters * blockIdx.x) % k_tiles;
   int slice_col_par = (iters * blockIdx.x) / k_tiles;
@@ -249,7 +247,7 @@ __global__ void Marlin_3bit_faster(
 
   // Compute all information about the current slice which is required for synchronization.
   auto init_slice = [&] () {
-    slice_iters = iters * (blockIdx.x + 1) - (k_tiles * slice_col_par + slice_row);
+    slice_iters = iters * (blockIdx.x + 1) - (k_tiles * slice_col_par + slice_row); //考虑到有的slice跨列
     if (slice_iters < 0 || slice_col_par >= n_tiles * parallel)
       slice_iters = 0;
     if (slice_iters == 0)
@@ -302,10 +300,11 @@ __global__ void Marlin_3bit_faster(
   constexpr int b_sh_stage = b_sh_stride * thread_k_blocks;
   constexpr int b_sh_wr_iters = b_sh_stage / b_sh_wr_delta; //2
 
-  int s_gl_stride = prob_n / 8;
-  constexpr int s_sh_stride = 16 * thread_n_blocks / 8;
-  constexpr int s_sh_stage = s_sh_stride;
+  int s_gl_stride = prob_n / 8; //针对marlin的情况：矩阵b是按行连续存储的
+  int s_sh_stride = 16 * thread_n_blocks / 8;
+  int s_sh_stage = s_sh_stride * ceildiv(thread_k_blocks,group_blocks);
   int s_gl_rd_delta = s_gl_stride;
+  int s_sh_rd_delta = 8 * (thread_n_blocks / 4) * (thread_k_blocks / b_sh_wr_iters / group_blocks);
 
   int a_gl_rd = a_gl_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);// Global A read index of current thread.
   a_gl_rd += a_gl_rd_delta_o * slice_row;
@@ -330,26 +329,23 @@ __global__ void Marlin_3bit_faster(
   bool B_sh_wr_pred = B1_sh_wr_pred || B2_sh_wr_pred;
 
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks) + s_sh_stride * slice_col + threadIdx.x;
-  int s_sh_wr = threadIdx.x;
+  int s_sh_wr = threadIdx.x; //threadIdx.x
+  //int s_sh_rd_iter = thread_k_blocks / group_blocks;
   int s_sh_rd;
   // We use a different scale layout for grouped and column-wise quantization as we scale a `half2` tile in column-major
   // layout in the former and in row-major in the latter case.
   //printf("group_blocks : %d \n", group_blocks);
-  if (group_blocks != -1)
-    s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
-  else
-    s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) % 4;
-  
-  // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
+  s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
+    // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
   // required for a certain tilesize or when the batchsize is not a multiple of 16.
   bool a_sh_wr_pred[a_sh_wr_iters];
   #pragma unroll
   for (int i = 0; i < a_sh_wr_iters; i++)
     a_sh_wr_pred[i] = a_sh_wr_delta * i + a_sh_wr < a_sh_stride * prob_m;
   //bool s_sh_wr_pred = threadIdx.x >= 96 && threadIdx.x <= 127;
-  bool s_sh_wr_pred = threadIdx.x <  s_sh_stride;
+  bool s_sh_wr_pred = threadIdx.x <  s_sh_stage; //fetch to shared pred
 
-    // To ensure that writing and reading A tiles to/from shared memory, the latter in fragment format, is fully bank
+  // To ensure that writing and reading A tiles to/from shared memory, the latter in fragment format, is fully bank
   // conflict free, we need to use a rather fancy XOR-based layout. The key here is that neither reads nor writes of 
   // the 16-byte `int4` blocks of 8 consecutive threads involve the same shared memory banks. Further, it seems (based
   // on NSight-Compute) that each warp must also write a consecutive memory segment?
@@ -383,7 +379,6 @@ __global__ void Marlin_3bit_faster(
     B1_ptr[i] = B1 + b_gl_rd_delta_i/2 * i+ (b_gl_rd / 64) * 32 + b_gl_rd % 64;;
     B2_ptr[i] = B2 + b_gl_rd_delta_i/4 * i+ (b_gl_rd_2 / 128) * 32 +  b_gl_rd_2 % 128; 
   }; 
-  
 
   extern __shared__ int4 sh[];
   // Shared memory storage for global fetch pipelines. 
@@ -393,10 +388,10 @@ __global__ void Marlin_3bit_faster(
   int4* sh_s = sh_b1 + stages * b_sh_stage;
 
   // Register storage for double buffer of shared memory reads. 
-  FragA frag_a[2][thread_m_blocks];
+  FragA frag_a[2][thread_m_blocks]; //Vec<half2, 4>
   I2_2 frag_b_quant[2];
-  FragC frag_c[thread_m_blocks][4][2];
-  FragS frag_s[2][4];
+  FragC frag_c[thread_m_blocks][4][2]; //Vec<float,4> [4][2]
+  FragS frag_s[2][4]; // Vec<half2, 1> [2][4]
 
   // Zero accumulators.
   auto zero_accums = [&] () {
@@ -416,7 +411,7 @@ __global__ void Marlin_3bit_faster(
           &A[a_gl_rd_delta_i * i + a_gl_rd + a_gl_rd_delta_o * a_off],
           a_sh_wr_pred[i]
         );
-      }     
+      }   
       int4* sh_b1_stage = sh_b1 + (b_sh_stage/2) * pipe;
       int4* sh_b2_stage = sh_b2 + (b_sh_stage/4) * pipe;    
       #pragma unroll
@@ -435,70 +430,20 @@ __global__ void Marlin_3bit_faster(
         B1_ptr[i] += b_gl_rd_delta_o/2;
         B2_ptr[i] += b_gl_rd_delta_o/4;
       }
-      // Only fetch scales if this tile starts a new group
-      if (group_blocks != -1 && pipe % (group_blocks / thread_k_blocks) == 0) {
+      //if (group_blocks != -1 && pipe % (group_blocks / thread_k_blocks) == 0) {
         int4* sh_s_stage = sh_s + s_sh_stage * pipe;
         cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd], s_sh_wr_pred);
+        //cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);
         s_gl_rd += s_gl_rd_delta;
-      }
     }
     // Insert a fence even when we are winding down the pipeline to ensure that waiting is also correct at this point.
     cp_async_fence();
   };
-
-  auto fetch_to_shared_faster = [&] (int pipe, int a_off, bool pred = true) {
-    if (pred) {
-      int4* sh_a_stage = sh_a + a_sh_stage * pipe;
-      #pragma unroll
-      for (int i = 0; i < a_sh_wr_iters; i++) {
-        cp_async4_pred(
-          &sh_a_stage[a_sh_wr_trans[i]],
-          &A[a_gl_rd_delta_i * i + a_gl_rd + a_gl_rd_delta_o * a_off],
-          a_sh_wr_pred[i]
-        );
-      }     
-      int4* sh_b1_stage = sh_b1 + (b_sh_stage/2) * pipe;
-      int4* sh_b2_stage = sh_b2 + (b_sh_stage/4) * pipe;    
-      //bool B2_sh_wr_pred = (b_sh_wr / 32) % 4 == pipe;
-      //bool B1_sh_wr_pred = (b_sh_wr / 32 + pipe) % 2;
-      //int b1_sh_wr = (b_sh_wr / 64) * 32 + (b_sh_wr - 32 * ((1 + pipe) % 2)) % 64;
-      //int b2_sh_wr = (b_sh_wr / 128) * 32 + ((b_sh_wr - 32 * pipe) % 128);
-      //bool B_sh_wr_pred = B1_sh_wr_pred || B2_sh_wr_pred;
-      //b_gl_rd += b_gl_stride * ((threadIdx.x - 32 * ((1 + pipe) % 2 ))/ b_sh_stride) + ((threadIdx.x - 32 * ((1 + pipe) % 2)) % b_sh_stride);
-      //b_gl_rd_2 += b_gl_stride * ((threadIdx.x-32 * pipe) / b_sh_stride) + ((threadIdx.x-32 * pipe)% b_sh_stride);
-      #pragma unroll
-      for (int i = 0; i < b_sh_wr_iters; i++) {
-        int4* share_B = sh_b1_stage;
-        const int4* B_ptr = B1_ptr[i];
-        if (B1_sh_wr_pred){
-          share_B = &sh_b1_stage[ (b_sh_wr_delta/2) * i + b1_sh_wr];
-          B_ptr = B1_ptr[i] +  (b_gl_rd / 64) * 32 + b_gl_rd % 64;      
-        }
-        else if (B2_sh_wr_pred){
-          share_B =&sh_b2_stage[ (b_sh_wr_delta/4) * i + b2_sh_wr];
-          B_ptr = B2_ptr[i] + (b_gl_rd_2 / 128) * 32 +  b_gl_rd_2 % 128;
-        }  
-        cp_async4_pred(share_B, B_ptr, B_sh_wr_pred);
-        B1_ptr[i] += b_gl_rd_delta_o/2;
-        B2_ptr[i] += b_gl_rd_delta_o/4;
-      }
-      // Only fetch scales if this tile starts a new group
-      if (group_blocks != -1 && pipe % (group_blocks / thread_k_blocks) == 0) {
-        int4* sh_s_stage = sh_s + s_sh_stage * pipe;
-        cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd], s_sh_wr_pred);
-        s_gl_rd += s_gl_rd_delta;
-      }
-    }
-    // Insert a fence even when we are winding down the pipeline to ensure that waiting is also correct at this point.
-    cp_async_fence();
-  };
-
 
   // Wait until the next thread tile has been loaded to shared memory.
   auto wait_for_stage = [&] () {
     // We only have `stages - 2` active fetches since we are double buffering and can only issue the next fetch when
-    // it is guaranteed that the previous shared memory load is fully complete (as it may otherwise be overwritten).
-    
+    // it is guaranteed that the previous shared memory load is fully complete (as it may otherwise be overwritten).; 
     cp_async_wait<stages - 2>();
     __syncthreads();
     
@@ -509,10 +454,10 @@ __global__ void Marlin_3bit_faster(
     // It may seem inefficient that we reload the groups for every sub-tile; however, this does not seem to be a
     // significant bottleneck, while some theoretically better attempts have lead to bad instruction ordering by the
     // compiler and correspondingly a noticable drop in performance.
-    if (group_blocks != -1) {
-      int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
-      reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd];
-    }
+      //int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
+    int4* sh_s_stage = sh_s + s_sh_stage * pipe;
+    reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
+
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++)
@@ -534,11 +479,10 @@ __global__ void Marlin_3bit_faster(
       b_quant_shift = b_quant >> 6;
       frag_b0 = dequant_faster(b_quant);
       // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-      if (group_blocks != -1)
-        scale(frag_b0, frag_s[k_mod_2][j], 0);
+
+      scale(frag_b0, frag_s[k_mod_2][j], 0);
       frag_b1 = dequant_faster(b_quant_shift);
-      if (group_blocks != -1)
-        scale(frag_b1, frag_s[k_mod_2][j], 1);
+      scale(frag_b1, frag_s[k_mod_2][j], 1);
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
         mma(frag_a[k_mod_2][i], frag_b0, frag_c[i][j][0]);
@@ -549,11 +493,10 @@ __global__ void Marlin_3bit_faster(
     frag_b0 = dequant_faster(b_quant3);
     b_quant_shift = b_quant3 >> 6;
       // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-    if (group_blocks != -1)
-      scale(frag_b0, frag_s[k_mod_2][3], 0);
+
+    scale(frag_b0, frag_s[k_mod_2][3], 0);
     frag_b1 = dequant_faster(b_quant_shift);
-    if (group_blocks != -1)
-      scale(frag_b1, frag_s[k_mod_2][3], 1);
+    scale(frag_b1, frag_s[k_mod_2][3], 1);
     //if(blockIdx.x == 0 && threadIdx.x == 0) printf("3,%x , %x, %x,%x, %x, %x \n:", b_quant, b_quant_shift,frag_b0[0],frag_b0[1],frag_b1[0],frag_b1[1]);    
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++) {
@@ -687,10 +630,6 @@ __global__ void Marlin_3bit_faster(
     // We first reorder in shared memory to guarantee the most efficient final global write patterns
     auto write = [&] (int idx, float c0, float c1, FragS& s) {
       half2 res = __halves2half2(__float2half(c0), __float2half(c1));
-      if (group_blocks == -1) // for per-column quantization we finally apply the scale here
-        {
-          res = __hmul2(res, s[0]);
-        }
       ((half2*) sh)[idx] = res;
     };
     if (threadIdx.x / 32 < thread_n_blocks / 4) {
@@ -723,26 +662,31 @@ __global__ void Marlin_3bit_faster(
 
   // Start global fetch and register load pipelines. 
   auto start_pipes = [&] () {
+    //printf("global to share \n");
     #pragma unroll
     for (int i = 0; i < stages - 1; i++)
       fetch_to_shared(i, i, i < slice_iters);
     zero_accums();
     wait_for_stage();
+    //printf("share to register \n");
     fetch_to_registers(0, 0);
     a_gl_rd += a_gl_rd_delta_o * (stages - 1);
   };
   start_pipes();
   //int compute = 0, reduce = 0;
+  //printf(" here before loop \n");
   // Main loop.
   while (slice_iters) {
     // We unroll over both the global fetch and the register load pipeline to ensure all shared memory accesses are
     // static. Note that both pipelines have even length meaning that the next iteration will always start at index 0.
    //clock_t start1 = clock();
+   //printf("here in loop");
     #pragma unroll
     for (int pipe = 0; pipe < stages;) {
       #pragma unroll
       for (int k = 0; k < b_sh_wr_iters; k++) {
         //clock_t start1 = clock();
+        //printf("before share to register \n");
         fetch_to_registers(k + 1, pipe % stages);
         //clock_t end1 = clock();
         //register_time += end1 - start1;
@@ -764,48 +708,59 @@ __global__ void Marlin_3bit_faster(
         break;
     }
     a_gl_rd += a_gl_rd_delta_o * stages;
-    //clock_t end1 = clock();
+    
+    //printf("after mma & transfer \n");
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
     // readable, other ways of writing the loop seemed to noticeably worse performance after compliation.
+   //clock_t end1 = clock();
     if (slice_iters == 0) {
+      //clock_t end1 = clock();
       cp_async_wait<0>();
+      //clock_t end2 = clock();
+      //int cp_async = end2 - end1;
+     //if(blockIdx.x == 0 && threadIdx.x == 0) printf("cp_async : %d\n",cp_async);
       bool last = slice_idx == slice_count - 1;
       // For per-column scales, we only fetch them here in the final step before write-out
-      if (group_blocks == -1 && last) {
-        //if (s_sh_wr_pred){
-        //  cp_async4_stream(&sh_s[s_sh_wr], &s[s_gl_rd]);        
-        //}
-        cp_async4_pred(&sh_s[s_sh_wr], &s[s_gl_rd],s_sh_wr_pred);
-        cp_async_fence();
-      }
+     //clock_t start1 = clock();
       thread_block_reduce();
-      if (group_blocks == -1 && last) {
-        cp_async_wait<0>();
-        __syncthreads();
-        if (threadIdx.x / 32 < thread_n_blocks / 4) {
-          reinterpret_cast<int4*>(&frag_s)[0] = sh_s[s_sh_rd + 0];
-          reinterpret_cast<int4*>(&frag_s)[1] = sh_s[s_sh_rd + 4];
-        }
-      }
+      //clock_t end1 = clock();
+      //int warp_reduce_time = end1-start1;
+      //if (blockIdx.x == 0 && threadIdx.x == 0) printf("warp_reduce_time : %d \n", warp_reduce_time);
+      
+      //clock_t start1 = clock();
       if (slice_count > 1) { // only globally reduce if there is more than one block in a slice
         //printf("thread %d, block %d, use the global_reduce \n",threadIdx.x, blockIdx.x);
+        //clock_t start1 = clock();
         barrier_acquire(&locks[slice_col], slice_idx);
+        //clock_t start1 = clock();
         global_reduce(slice_idx == 0, last);
         barrier_release(&locks[slice_col], last);
+        //clock_t end1 = clock();
+        //int block_reduce_time = end1-start1;
+        //if (blockIdx.x == 0 && threadIdx.x == 0) printf("block_reduce_time : %d \n", block_reduce_time);
       }
+      //clock_t end1 = clock();
+      //int block_reduce_time = end1-start1;
+      //if (blockIdx.x == 0 && threadIdx.x == 0) printf("block_reduce_time : %d \n", block_reduce_time);
+
 
       if (last) // only the last block in a slice actually writes the result
       {
+        //clock_t start1 = clock();
+
         //if(blockIdx.x == 0 && threadIdx.x == 0)printf("time statistics : %d, %d,  %d \n",register_time,share_time,mma_time);
         write_result();
+        //clock_t end1 = clock();
+        //int write_time = end1-start1;
+        //if (blockIdx.x == 0 && threadIdx.x == 0) printf("write_time : %d \n", write_time);
+
       }
-        
+      //clock_t start1 = clock();
       slice_row = 0;
       slice_col_par++;
       slice_col++;
       init_slice();
       if (slice_iters) {
-        //if(blockIdx.x == 0 && threadIdx.x == 0) printf("In if(slice_iters) : \n");
         a_gl_rd = a_gl_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);
         #pragma unroll
         for (int i = 0; i < b_sh_wr_iters; i++)
@@ -824,13 +779,20 @@ __global__ void Marlin_3bit_faster(
         s_gl_rd = s_sh_stride * slice_col + threadIdx.x;
         start_pipes();
       }
+      //clock_t end1 = clock();
+      //int final = end1-start1;
+      //if (blockIdx.x == 0 && threadIdx.x == 0) printf("final_time : %d \n", final);
     }
     //clock_t end2 = clock();
     //compute += end1-start1;
-    //reduce += end2-end1;
+   //reduce += end2-end1;
+    //if(blockIdx.x == 0 && threadIdx.x == 0) printf("compute time : , reduce_time: %d \n",reduce);
+  //clock_t end1 = clock();
+  //int outer_cycle = end1 - start1;
+  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("outer_cycle: %d \n",outer_cycle);
   }
-  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("compute time : %d, reduce_time: %d \n",compute,reduce);
-
+  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("compute time : , reduce_time: %d \n",reduce);
+  
 }
 
 
@@ -893,9 +855,11 @@ int marlin_cuda_3bit_faster(
 
   int thread_k_blocks = thread_k / 16;
   int thread_n_blocks = thread_n / 16;
-  int group_blocks = (groupsize == -1) ? -1 : groupsize / 16;
+  int group_blocks =  groupsize / 16;
+  //printf("here groupsize : %d", groupsize);
   int blocks = sms;
-
+  if (group_blocks == 0)
+    return ERR_PROB_SHAPE;
   if (prob_n % thread_n != 0 || prob_k % thread_k != 0 || (group_blocks != -1 && prob_k % group_blocks != 0))
     return ERR_PROB_SHAPE;
   if (prob_m == 0 || prob_n == 0 || prob_k == 0)
@@ -931,14 +895,14 @@ int marlin_cuda_3bit_faster(
     // For compilation speed, we only define the kernel configurations that have seemed useful (in terms of performance)
     // in our testing, however many more are, in principle, possible.
     if (false) {}
-    CALL_IF(1, 16,  4, -1)
-    CALL_IF(1, 16,  4,  8)
-    CALL_IF(2, 16,  4, -1)
-    CALL_IF(2, 16,  4,  8)
-    CALL_IF(3, 16,  4, -1)
-    CALL_IF(3, 16,  4,  8)
-    CALL_IF(4, 16,  4, -1)
-    CALL_IF(4, 16,  4,  8)
+    CALL_IF(1, 4, 16, 4)
+    CALL_IF(2, 4, 16, 4)
+    CALL_IF(3, 4, 16, 4)
+    CALL_IF(4, 4, 16, 4)
+    CALL_IF(1, 16,  4,  4)
+    CALL_IF(2, 16,  4,  4)
+    CALL_IF(3, 16,  4,  4)
+    CALL_IF(4, 16,  4,  4)
     else
       ret = ERR_KERN_SHAPE;
 

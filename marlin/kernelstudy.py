@@ -66,10 +66,10 @@ class Test(unittest.TestCase):
         #B_ref, B1, B2, s = gen_quant4(k, n, groupsize=groupsize)
         #ref3, ref4, q4, q1, q2, s4, s3 = gen_quant4and3(m, n, groupsize=-1)
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
-        #C_ref = torch.matmul(A, B_ref)
+        C_ref = torch.matmul(A, B_ref)
         workspace = torch.zeros(n // 128 * 16, device=DEV)
         #marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
-        marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
+        marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n)
         torch.cuda.synchronize()
         """
         #print(B_ref)
@@ -81,10 +81,10 @@ class Test(unittest.TestCase):
         print(".........")
         print(C_ref)
         """
-        #self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
+        self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
     
     def test_tiles(self):
-        self.run_problem(16,14336, 4096, 64, 256)
+        self.run_problem(16, 4096,14336, 64, 256, 64)
     
 if __name__ == '__main__':
     unittest.main()
