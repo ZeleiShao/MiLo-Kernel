@@ -42,8 +42,9 @@ def gen_quant3(m, n, groupsize=-1):
     linear = nn.Linear(m, n)
     linear.weight.data = ref.t()
     # Workaround to test some special cases that are forbidden by the API
-    #layer = marlin.Layer3bit(256, 256, groupsize=groupsize)
-    layer = marlin.Layer3bitFaster(m, n, groupsize=groupsize)
+    layer = marlin.Layer3bit(256, 256, groupsize=groupsize)
+    #layer = marlin.Layer3bitFaster(m, n, groupsize=groupsize)
+    #layer = marlin.Layer3bitWithZero(m, n, groupsize=groupsize)
     if groupsize == -1:
         groupsize = m
     layer.k = m

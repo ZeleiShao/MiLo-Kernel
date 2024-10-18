@@ -7,7 +7,7 @@ import marlin
 
 import time
 
-def benchmark(f, warmup=1, iter=10):
+def benchmark(f, warmup=1, iter=20):
     for i in range(warmup + iter):
         f()
         # We do not synchronize here in order to hide the kernel launch overhead during benchmarkining as this will also
@@ -22,7 +22,7 @@ def benchmark(f, warmup=1, iter=10):
     time.sleep(1.)
     return res
 
-def get_problem(m, n, k, groupsize=-1):
+def get_problem(m, n, k, groupsize=64):
     if groupsize == -1:
         groupsize = k
     dev = torch.device('cuda:0')
@@ -31,8 +31,9 @@ def get_problem(m, n, k, groupsize=-1):
     B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
     C = torch.zeros((m, n), dtype=torch.half, device=dev)
     s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
+    z = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
     torch.cuda.synchronize()
-    return A, B, C, B_ref, s
+    return A, B, C, B_ref, s, z
 
 def get_problem_int3(m, n, k, groupsize=64):
     if groupsize == -1:
@@ -43,9 +44,10 @@ def get_problem_int3(m, n, k, groupsize=64):
     B2 = torch.randint(low=-2**31, high=2**31, size=(k * n // 32,), device=dev)
     B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
     C = torch.zeros((m, n), dtype=torch.half, device=dev)
-    s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
+    s = torch.ones((k // groupsize, n), dtype=torch.half, device=dev)
+    z = torch.ones((k // groupsize, n), dtype=torch.half, device=dev)
     torch.cuda.synchronize()
-    return A, B1, B2, C, B_ref, s
+    return A, B1, B2, C, B_ref, s, z
 
 def gen_quant3(m, n, groupsize=-1):
     maxq = 2 ** 3 - 1
@@ -73,11 +75,13 @@ def gen_quant3(m, n, groupsize=-1):
         w = reshape(w)
 
     s = s.reshape((-1, n)).contiguous()
+    z = torch.randn(s.shape)
     linear = nn.Linear(m, n)
     linear.weight.data = ref.t()
     # Workaround to test some special cases that are forbidden by the API
     #layer = marlin.Layer3bit(256, 256, groupsize=groupsize)
-    layer = marlin.Layer3bitFaster(m, n, groupsize=groupsize)
+    #layer = marlin.Layer3bitFaster(m, n, groupsize=groupsize)
+    layer = marlin.Layer3bitWithZero(m, n, groupsize=groupsize)
     if groupsize == -1:
         groupsize = m
     layer.k = m
@@ -86,11 +90,13 @@ def gen_quant3(m, n, groupsize=-1):
     layer.B1 = torch.empty((m // 16, n * 16 * 2 // 32), dtype=torch.int, device=dev)
     layer.B2 = torch.empty((m // 16, n * 16 // 32), dtype=torch.int, device=dev)
     layer.s = torch.empty((m // groupsize, n), dtype=torch.half, device=dev)
-    layer.pack(linear, s.t())
+    layer.z = torch.empty((m // groupsize, n), dtype=torch.half, device=dev)
+    layer.pack(linear, s.t(), z.t())
     q1 = layer.B1
     q2 = layer.B2
     s = layer.s
-    return ref, q1, q2, s
+    z = layer.z
+    return ref, q1, q2, s, z
 
 
 def benchmark_dense(A, B, C):
@@ -101,14 +107,14 @@ def benchmark_dense(A, B, C):
         'GB/s': (2 * A.numel() + 2 * B.numel() + 2 * C.numel()) / res / 10 ** 9
     }
 
-def benchmark_quant(A, B1, B2, C, s, thread_k, thread_n, sms):
+def benchmark_quant(A, B1, B2, C, s, z,thread_k, thread_n, sms):
     workspace = torch.zeros((C.shape[1] // 128) * 16, device=torch.device('cuda:0'))
     #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
-    res = benchmark(lambda: marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, sms,16))
+    res = benchmark(lambda: marlin.mul_3bit_with_zero(A, B1, B2, C, s, z, workspace, thread_k, thread_n, sms,16))
     return {
         's': res,
         'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
-        'GB/s': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel()) / res / 10 ** 9
+        'GB/s': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / res / 10 ** 9
     }
 
 def benchmark_quant_4bit(A, B, C, s, thread_k, thread_n, sms):
@@ -140,12 +146,16 @@ MODELS = {
    # ],
 'w1' : [(4096, 14336)],
 'w2' : [(14336, 4096)],
-#'mixtual' : [(4096, 14336),(14336, 4096),(4096, 14336)],
-
+'mixtual' : [(4096, 14336),(14336, 4096),(4096, 14336)],
+'ideal': [
+        (4 * 256 * SMS, 256 * SMS)
+    ],
+'w3' : [(14848, 14848 * 5 + 1024)],
+#'w4' : [(14848 * 5, 14848)],
 #'Falcon180B': [
 #       (14848, 14848 * 5 + 1024),
- #      (14848 * 5, 14848)
-  # ]
+#       (14848 * 5, 14848)
+#   ]
 }
 
 # Set to true in order to run a more complete benchmark sweep; the default is reproduce README experiments
@@ -175,15 +185,15 @@ for groupsize in [64] :
                 continue
             tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0} 
             for layer in layers:
-                #A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
-                #B_ref, B1, B2, s = gen_quant3(layer[0], layer[1], groupsize)
-                A, B1, B2, C, B_ref, s = get_problem_int3(batch, layer[1], layer[0], groupsize)
-                #C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
+                A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
+                #B_ref, B1, B2, s, z = gen_quant3(layer[0], layer[1], groupsize)
+                A, B1, B2, C, B_ref, s, z = get_problem_int3(batch, layer[1], layer[0], groupsize)
+                C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
                 #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
                     #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
-                res_q = benchmark_quant(A, B1, B2, C, s,64, 256, SMS)
+                res_q = benchmark_quant(A, B1, B2, C, s,z, 64, 256, SMS)
                 #else:
                 #res_q = benchmark_quant_4bit(A, B, C, s, -1, -1, SMS)
                 #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)

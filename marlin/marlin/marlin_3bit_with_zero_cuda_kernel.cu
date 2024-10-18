@@ -50,6 +50,7 @@ using FragA = Vec<half2, 4>;
 using FragB = Vec<half2, 2>;
 using FragC = Vec<float, 4>;
 using FragS = Vec<half2, 1>; // quantization scales
+using FragZ = Vec<half2, 1>;
 using I2 = Vec<int,2>;
 using I2_2 = Vec<I2,2>;
 // Predicated asynchronous global->shared copy; used for inputs A where we apply predication to handle batchsizes that
@@ -134,14 +135,10 @@ __device__ inline FragB dequant_faster(int& q) {
   // Guarantee that the `(a & b) | c` operations are LOP3s.
   int lo = lop3<(0xf0 & 0xcc) | 0xaa>(q, LO, EX);
   int hi = lop3<(0xf0 & 0xcc) | 0xaa>(q, HI, EX);
-  // We want signed int4 outputs, hence we fuse the `-4` symmetric zero point directly into `SUB` and `ADD`.
-  const int SUB = 0x64046404;
+  const int SUB = 0x64006400;
   const int MUL = 0x30003000;
-  const int ADD = 0xd820d820;
+  const int ADD = 0xd800d800;
   FragB frag_b;
-  //frag_b[0] = *reinterpret_cast<half2*>(&lo);
-  //frag_b[1] = *reinterpret_cast<half2*>(&hi);
-  
   frag_b[0] = __hsub2(
     *reinterpret_cast<half2*>(&lo),
     *reinterpret_cast<const half2*>(&SUB)
@@ -154,10 +151,13 @@ __device__ inline FragB dequant_faster(int& q) {
 }
 
 // Multiply dequantized values by the corresponding quantization scale; used only for grouped quantization.
-__device__ inline void scale(FragB& frag_b, FragS& frag_s, int i) {
+__device__ inline void scale(FragB& frag_b, FragS& frag_s, int i, FragZ& frag_z) {
   half2 s = __half2half2(reinterpret_cast<__half*>(&frag_s)[i]);
-  frag_b[0] = __hmul2(frag_b[0], s);
-  frag_b[1] = __hmul2(frag_b[1], s);
+  half2 zero = __half2half2(reinterpret_cast<__half*>(&frag_z)[i]);
+  frag_b[0] = __hfma2(frag_b[0], s, zero);
+  frag_b[1] = __hfma2(frag_b[1], s, zero);
+  //frag_b[0] = __hmul2(frag_b[0], s);
+  //frag_b[1] = __hmul2(frag_b[1], s);
 }
 
 // Wait until barrier reaches `count`, then lock for current threadblock.
@@ -195,12 +195,13 @@ template <
   const int stages, // number of stages for the async global->shared fetch pipeline
   const int group_blocks = 4 // number of consecutive 16x16 blocks with a separate quantization scale
 >
-__global__ void Marlin_3bit_faster(
+__global__ void Marlin_3bit_with_zero(
   const int4* __restrict__ A, // fp16 input matrix of shape mxk 
   const int4* __restrict__ B1, // 3bit quantized weight matrix of shape kxn 
   const int4* __restrict__ B2,
         int4* __restrict__ C, // fp16 output buffer of shape mxn
   const int4* __restrict__ s, // fp16 quantization scales of shape (k/groupsize)xn 
+  const int4* __restrict__ zero, // fp16 quantization zero points of shape (k/groupsize)xn 
   int  prob_m, // batch dimension m
   int  prob_n, // output dimension n
   int  prob_k, // reduction dimension k
@@ -307,7 +308,8 @@ __global__ void Marlin_3bit_faster(
   int s_sh_stride = 16 * thread_n_blocks / 8;
   int s_sh_stage = s_sh_stride * ceildiv(thread_k_blocks,group_blocks);
   int s_gl_rd_delta = s_gl_stride * ceildiv(thread_k_blocks,group_blocks);
-  int s_sh_rd_delta =( threads / 32 ) / (thread_n_blocks / 4) / group_blocks;
+  //if (blockIdx.x == 0 && threadIdx.x == 0) printf("check groupsize %d, %d, %d \n",thread_k_blocks,group_blocks,ceildiv(thread_k_blocks,group_blocks));
+  int s_sh_rd_delta = 8 * (thread_n_blocks / 4) * (thread_k_blocks / b_sh_wr_iters / group_blocks);
 
   int a_gl_rd = a_gl_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);// Global A read index of current thread.
   a_gl_rd += a_gl_rd_delta_o * slice_row;
@@ -333,10 +335,10 @@ __global__ void Marlin_3bit_faster(
 
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks) + s_sh_stage * slice_col + threadIdx.x;
   int s_sh_wr = threadIdx.x; //threadIdx.x
-  //int s_sh_rd_iter = thread_k_blocks / group_blocks;
-  int s_sh_rd; //from share to register
-  s_sh_rd = 8 * (thread_n_blocks / 4) * ((threadIdx.x / 32) / (thread_n_blocks / 4) / group_blocks) + 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
-  // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
+  int s_sh_rd;
+  s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
+
+    // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
   // required for a certain tilesize or when the batchsize is not a multiple of 16.
   bool a_sh_wr_pred[a_sh_wr_iters];
   #pragma unroll
@@ -386,12 +388,13 @@ __global__ void Marlin_3bit_faster(
   int4* sh_b1 = sh_a + stages * a_sh_stage;
   int4* sh_b2 = sh_b1 + stages *b_sh_stage/2;
   int4* sh_s = sh_b1 + stages * b_sh_stage;
-
+  int4* sh_z = sh_s + stages * s_sh_stage;
   // Register storage for double buffer of shared memory reads. 
   FragA frag_a[2][thread_m_blocks]; //Vec<half2, 4>
   I2_2 frag_b_quant[2];
   FragC frag_c[thread_m_blocks][4][2]; //Vec<float,4> [4][2]
   FragS frag_s[2][4]; // Vec<half2, 1> [2][4]
+  FragZ frag_z[2][4];
 
   // Zero accumulators.
   auto zero_accums = [&] () {
@@ -434,6 +437,10 @@ __global__ void Marlin_3bit_faster(
         int4* sh_s_stage = sh_s + s_sh_stage * pipe;
         cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd], s_sh_wr_pred);
         //cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);
+
+        int4* sh_z_stage = sh_z + s_sh_stage * pipe;
+        cp_async4_pred(&sh_z_stage[s_sh_wr], &zero[s_gl_rd], s_sh_wr_pred);
+        //cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);
         s_gl_rd += s_gl_rd_delta;
     }
     // Insert a fence even when we are winding down the pipeline to ensure that waiting is also correct at this point.
@@ -457,15 +464,17 @@ __global__ void Marlin_3bit_faster(
       //int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
     int4* sh_s_stage = sh_s + s_sh_stage * pipe;
     reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
+    int4* sh_z_stage = sh_z + s_sh_stage * pipe;
+    reinterpret_cast<int4*>(&frag_z[k % 2])[0] = sh_z_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
+
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++)
       ldsm4(frag_a[k % 2][i], &sh_a_stage[a_sh_rd_trans[k % b_sh_wr_iters][i]]);
     I2* sh_b1_stage = reinterpret_cast<I2*>(sh_b1) + b_sh_stage * pipe;
     int* sh_b2_stage = reinterpret_cast<int*>(sh_b2) + b_sh_stage * pipe;
-    int b_read = b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd;
-    frag_b_quant[k % 2][0] = sh_b1_stage[b_read];
-    frag_b_quant[k % 2][1][0] = sh_b2_stage[b_read];
+    frag_b_quant[k % 2][0] = sh_b1_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
+    frag_b_quant[k % 2][1][0] = sh_b2_stage[b_sh_rd_delta * (k % b_sh_wr_iters) + b_sh_rd];
   };
 
   // Execute the actual tensor core matmul of a sub-tile. 
@@ -479,10 +488,9 @@ __global__ void Marlin_3bit_faster(
       b_quant_shift = b_quant >> 6;
       frag_b0 = dequant_faster(b_quant);
       // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-
-      scale(frag_b0, frag_s[k_mod_2][j], 0);
+      scale(frag_b0, frag_s[k_mod_2][j], 0, frag_z[k_mod_2][j]);
       frag_b1 = dequant_faster(b_quant_shift);
-      scale(frag_b1, frag_s[k_mod_2][j], 1);
+      scale(frag_b1, frag_s[k_mod_2][j], 1, frag_z[k_mod_2][j]);
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
         mma(frag_a[k_mod_2][i], frag_b0, frag_c[i][j][0]);
@@ -493,10 +501,9 @@ __global__ void Marlin_3bit_faster(
     frag_b0 = dequant_faster(b_quant3);
     b_quant_shift = b_quant3 >> 6;
       // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-
-    scale(frag_b0, frag_s[k_mod_2][3], 0);
+    scale(frag_b0, frag_s[k_mod_2][3], 0, frag_z[k_mod_2][3]);
     frag_b1 = dequant_faster(b_quant_shift);
-    scale(frag_b1, frag_s[k_mod_2][3], 1);
+    scale(frag_b1, frag_s[k_mod_2][3], 1, frag_z[k_mod_2][3]);
     //if(blockIdx.x == 0 && threadIdx.x == 0) printf("3,%x , %x, %x,%x, %x, %x \n:", b_quant, b_quant_shift,frag_b0[0],frag_b0[1],frag_b1[0],frag_b1[1]);    
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++) {
@@ -776,7 +783,7 @@ __global__ void Marlin_3bit_faster(
             B2_ptr[i] -= b_gl_stride/4;
           }
         }
-        s_gl_rd = s_sh_stage * slice_col + threadIdx.x;
+        s_gl_rd = s_sh_stage  * slice_col + threadIdx.x;
         start_pipes();
       }
       //clock_t end1 = clock();
@@ -795,6 +802,7 @@ __global__ void Marlin_3bit_faster(
   
 }
 
+
 // 8 warps are a good choice since every SM has 4 schedulers and having more than 1 warp per schedule allows some more
 // latency hiding. At the same time, we want relatively few warps to have many registers per warp and small tiles.
 const int THREADS = 256;
@@ -807,14 +815,14 @@ const int SHARED_MEM = 96 * 1024; // max shared memory on compute capability 8.6
     group_blocks == GROUP_BLOCKS \
   ) { \
     cudaFuncSetAttribute( \
-      Marlin_3bit_faster<THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS>, \
+      Marlin_3bit_with_zero<THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS>, \
       cudaFuncAttributeMaxDynamicSharedMemorySize, \
       SHARED_MEM \
     ); \
-    Marlin_3bit_faster< \
+    Marlin_3bit_with_zero< \
       THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS \
     ><<<blocks, THREADS, SHARED_MEM, stream>>>( \
-      A_ptr, B1_ptr, B2_ptr, C_ptr, s_ptr, \
+      A_ptr, B1_ptr, B2_ptr, C_ptr, s_ptr, zero_ptr,\
       prob_m, prob_n, prob_k, \
       locks \
     ); \
@@ -823,12 +831,13 @@ const int SHARED_MEM = 96 * 1024; // max shared memory on compute capability 8.6
 const int ERR_PROB_SHAPE = 1;
 const int ERR_KERN_SHAPE = 2;
 
-int marlin_cuda_3bit_faster(
+int marlin_cuda_3bit_with_zero(
   const void* A,
   const void* B1,
   const void* B2,
         void* C,
         void* s,
+        void* zero,
   int prob_m,
   int prob_n,
   int prob_k,
@@ -871,6 +880,7 @@ int marlin_cuda_3bit_faster(
   //printf("%d\n", *B2_ptr);
   int4* C_ptr = (int4*) C;
   const int4* s_ptr = (const int4*) s;
+  const int4* zero_ptr = (const int4*) zero;
 
   int cols = prob_n / thread_n;
   int* locks = (int*) workspace;
@@ -890,14 +900,17 @@ int marlin_cuda_3bit_faster(
       i += 4 * (par - 1);
       thread_m_blocks = 4;
     }
-    
     // For compilation speed, we only define the kernel configurations that have seemed useful (in terms of performance)
     // in our testing, however many more are, in principle, possible.
     if (false) {}
-    CALL_IF(1, 16,  4,  4)
-    CALL_IF(2, 16,  4,  4)
-    CALL_IF(3, 16,  4,  4)
-    CALL_IF(4, 16,  4,  4)
+    CALL_IF(1, 16, 4, 4)
+    CALL_IF(2, 16, 4, 4)
+    CALL_IF(3, 16, 4, 4)
+    CALL_IF(4, 16, 4, 4)
+    CALL_IF(1, 16, 4, 2)
+    CALL_IF(2, 16, 4, 2)
+    CALL_IF(3, 16, 4, 2)
+    CALL_IF(4, 16, 4, 2)
     else
       ret = ERR_KERN_SHAPE;
 
