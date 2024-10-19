@@ -153,9 +153,9 @@ __device__ inline FragB dequant_faster(int& q) {
 // Multiply dequantized values by the corresponding quantization scale; used only for grouped quantization.
 __device__ inline void scale(FragB& frag_b, FragS& frag_s, int i, FragZ& frag_z) {
   half2 s = __half2half2(reinterpret_cast<__half*>(&frag_s)[i]);
-  half2 zero = __half2half2(reinterpret_cast<__half*>(&frag_z)[i]);
-  frag_b[0] = __hfma2(frag_b[0], s, zero);
-  frag_b[1] = __hfma2(frag_b[1], s, zero);
+  half2 z = __half2half2(reinterpret_cast<__half*>(&frag_z)[i]);
+  frag_b[0] = __hfma2(frag_b[0], s, z);
+  frag_b[1] = __hfma2(frag_b[1], s, z);
   //frag_b[0] = __hmul2(frag_b[0], s);
   //frag_b[1] = __hmul2(frag_b[1], s);
 }
@@ -200,8 +200,8 @@ __global__ void Marlin_3bit_with_zero(
   const int4* __restrict__ B1, // 3bit quantized weight matrix of shape kxn 
   const int4* __restrict__ B2,
         int4* __restrict__ C, // fp16 output buffer of shape mxn
-  const int4* __restrict__ s, // fp16 quantization scales of shape (k/groupsize)xn 
   const int4* __restrict__ zero, // fp16 quantization zero points of shape (k/groupsize)xn 
+  const int4* __restrict__ s, // fp16 quantization scales of shape (k/groupsize)xn 
   int  prob_m, // batch dimension m
   int  prob_n, // output dimension n
   int  prob_k, // reduction dimension k
@@ -225,14 +225,13 @@ __global__ void Marlin_3bit_with_zero(
     parallel = prob_m / (16 * thread_m_blocks);
     prob_m = 16 * thread_m_blocks;
   }
+  //if (threadIdx.x == 0 && blockIdx.x == 0) printf("%d",zero==nullptr);
 
   int k_tiles = prob_k / 16 / thread_k_blocks;
   int n_tiles = prob_n / 16 / thread_n_blocks;
   int iters = ceildiv(k_tiles * n_tiles * parallel, gridDim.x);
   // Ensure that the number of tiles in each stripe is a multiple of the groupsize; this avoids an annoying special case
   // where a stripe starts in the middle of group.
-  //if (group_blocks != -1)
-  //  iters = (group_blocks / thread_k_blocks) * ceildiv(iters, (group_blocks / thread_k_blocks));
 
   int slice_row = (iters * blockIdx.x) % k_tiles;
   int slice_col_par = (iters * blockIdx.x) / k_tiles;
@@ -308,7 +307,6 @@ __global__ void Marlin_3bit_with_zero(
   int s_sh_stride = 16 * thread_n_blocks / 8;
   int s_sh_stage = s_sh_stride * ceildiv(thread_k_blocks,group_blocks);
   int s_gl_rd_delta = s_gl_stride * ceildiv(thread_k_blocks,group_blocks);
-  //if (blockIdx.x == 0 && threadIdx.x == 0) printf("check groupsize %d, %d, %d \n",thread_k_blocks,group_blocks,ceildiv(thread_k_blocks,group_blocks));
   int s_sh_rd_delta = 8 * (thread_n_blocks / 4) * (thread_k_blocks / b_sh_wr_iters / group_blocks);
 
   int a_gl_rd = a_gl_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);// Global A read index of current thread.
@@ -335,6 +333,7 @@ __global__ void Marlin_3bit_with_zero(
 
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks) + s_sh_stage * slice_col + threadIdx.x;
   int s_sh_wr = threadIdx.x; //threadIdx.x
+  
   int s_sh_rd;
   s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
 
@@ -386,7 +385,7 @@ __global__ void Marlin_3bit_with_zero(
   // Shared memory storage for global fetch pipelines. 
   int4* sh_a = sh;
   int4* sh_b1 = sh_a + stages * a_sh_stage;
-  int4* sh_b2 = sh_b1 + stages *b_sh_stage/2;
+  int4* sh_b2 = sh_b1 + stages * b_sh_stage/2;
   int4* sh_s = sh_b1 + stages * b_sh_stage;
   int4* sh_z = sh_s + stages * s_sh_stage;
   // Register storage for double buffer of shared memory reads. 
@@ -395,7 +394,6 @@ __global__ void Marlin_3bit_with_zero(
   FragC frag_c[thread_m_blocks][4][2]; //Vec<float,4> [4][2]
   FragS frag_s[2][4]; // Vec<half2, 1> [2][4]
   FragZ frag_z[2][4];
-
   // Zero accumulators.
   auto zero_accums = [&] () {
     #pragma unroll
@@ -439,8 +437,7 @@ __global__ void Marlin_3bit_with_zero(
         //cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);
 
         int4* sh_z_stage = sh_z + s_sh_stage * pipe;
-        cp_async4_pred(&sh_z_stage[s_sh_wr], &zero[s_gl_rd], s_sh_wr_pred);
-        //cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);
+        cp_async4_pred(&sh_z_stage[s_sh_wr], &zero[s_gl_rd], s_sh_wr_pred); 
         s_gl_rd += s_gl_rd_delta;
     }
     // Insert a fence even when we are winding down the pipeline to ensure that waiting is also correct at this point.
@@ -466,7 +463,6 @@ __global__ void Marlin_3bit_with_zero(
     reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
     int4* sh_z_stage = sh_z + s_sh_stage * pipe;
     reinterpret_cast<int4*>(&frag_z[k % 2])[0] = sh_z_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
-
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++)
@@ -681,19 +677,16 @@ __global__ void Marlin_3bit_with_zero(
   };
   start_pipes();
   //int compute = 0, reduce = 0;
-  //printf(" here before loop \n");
   // Main loop.
   while (slice_iters) {
     // We unroll over both the global fetch and the register load pipeline to ensure all shared memory accesses are
     // static. Note that both pipelines have even length meaning that the next iteration will always start at index 0.
    //clock_t start1 = clock();
-   //printf("here in loop");
     #pragma unroll
     for (int pipe = 0; pipe < stages;) {
       #pragma unroll
       for (int k = 0; k < b_sh_wr_iters; k++) {
         //clock_t start1 = clock();
-        //printf("before share to register \n");
         fetch_to_registers(k + 1, pipe % stages);
         //clock_t end1 = clock();
         //register_time += end1 - start1;
@@ -716,7 +709,6 @@ __global__ void Marlin_3bit_with_zero(
     }
     a_gl_rd += a_gl_rd_delta_o * stages;
     
-    //printf("after mma & transfer \n");
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
     // readable, other ways of writing the loop seemed to noticeably worse performance after compliation.
    //clock_t end1 = clock();
@@ -725,7 +717,6 @@ __global__ void Marlin_3bit_with_zero(
       cp_async_wait<0>();
       //clock_t end2 = clock();
       //int cp_async = end2 - end1;
-     //if(blockIdx.x == 0 && threadIdx.x == 0) printf("cp_async : %d\n",cp_async);
       bool last = slice_idx == slice_count - 1;
       // For per-column scales, we only fetch them here in the final step before write-out
      //clock_t start1 = clock();
@@ -822,7 +813,7 @@ const int SHARED_MEM = 96 * 1024; // max shared memory on compute capability 8.6
     Marlin_3bit_with_zero< \
       THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS \
     ><<<blocks, THREADS, SHARED_MEM, stream>>>( \
-      A_ptr, B1_ptr, B2_ptr, C_ptr, s_ptr, zero_ptr,\
+      A_ptr, B1_ptr, B2_ptr, C_ptr,  zero_ptr, s_ptr,\
       prob_m, prob_n, prob_k, \
       locks \
     ); \
@@ -837,7 +828,7 @@ int marlin_cuda_3bit_with_zero(
   const void* B2,
         void* C,
         void* s,
-        void* zero,
+        void* zeros,
   int prob_m,
   int prob_n,
   int prob_k,
@@ -877,11 +868,10 @@ int marlin_cuda_3bit_with_zero(
   const int4* B1_ptr = (const int4*) B1;
   const int4* B2_ptr = (const int4*) B2;
 
-  //printf("%d\n", *B2_ptr);
   int4* C_ptr = (int4*) C;
   const int4* s_ptr = (const int4*) s;
-  const int4* zero_ptr = (const int4*) zero;
-
+  const int4* zero_ptr = (const int4*) zeros;
+  //std::cout << ((int*)zero_ptr)[2*256-1] << std::endl;
   int cols = prob_n / thread_n;
   int* locks = (int*) workspace;
 
@@ -900,6 +890,7 @@ int marlin_cuda_3bit_with_zero(
       i += 4 * (par - 1);
       thread_m_blocks = 4;
     }
+    //std::cout << ((int*)zero_ptr)[0] << std::endl;
     // For compilation speed, we only define the kernel configurations that have seemed useful (in terms of performance)
     // in our testing, however many more are, in principle, possible.
     if (false) {}
@@ -907,10 +898,6 @@ int marlin_cuda_3bit_with_zero(
     CALL_IF(2, 16, 4, 4)
     CALL_IF(3, 16, 4, 4)
     CALL_IF(4, 16, 4, 4)
-    CALL_IF(1, 16, 4, 2)
-    CALL_IF(2, 16, 4, 2)
-    CALL_IF(3, 16, 4, 2)
-    CALL_IF(4, 16, 4, 2)
     else
       ret = ERR_KERN_SHAPE;
 

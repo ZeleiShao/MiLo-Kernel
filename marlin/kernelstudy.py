@@ -20,10 +20,11 @@ def gen_quant3(m, n, groupsize=64):
         w = w.reshape((-1, groupsize, n))
         w = w.permute(1, 0, 2)
         w = w.reshape((groupsize, -1))
-    z = torch.randn(s.shape,dtype=torch.half, device=DEV)
-    s = torch.max(torch.abs(w-z), 0, keepdim=True)[0]
+    s = torch.max(torch.abs(w), 0, keepdim=True)[0]
     s *= 2 / maxq
-    w = torch.round((w-z) / s).int()
+    w = torch.round(w / s).int()
+    z = torch.randn(s.shape, dtype=torch.half,device=DEV)
+    w += (maxq + 1) // 2
     w = torch.clamp(w, 0, maxq)
     ref = w.half() * s + z
     #ref = w
@@ -34,7 +35,6 @@ def gen_quant3(m, n, groupsize=64):
             w = w.reshape((m, n)).contiguous()
             return w
         ref = reshape(ref)
-        w = reshape(w)
 
     s = s.reshape((-1, n)).contiguous()
     z = z.reshape((-1, n)).contiguous()
@@ -52,6 +52,7 @@ def gen_quant3(m, n, groupsize=64):
     layer.s = torch.empty((m // groupsize, n), dtype=torch.half, device=DEV)
     layer.z = torch.empty((m // groupsize, n), dtype=torch.half, device=DEV)
     layer.pack(linear, s.t(), z.t())
+    #layer.pack(linear, s.t())
     q1 = layer.B1
     q2 = layer.B2
     s = layer.s
@@ -63,7 +64,7 @@ class Test(unittest.TestCase):
         print('% 5d % 6d % 6d % 4d % 4d % 4d' % (m, n, k, thread_k, thread_n, groupsize))
         A = torch.randn((m, k), dtype=torch.half, device=DEV)
         B_ref, B1, B2, s, z = gen_quant3(k, n, groupsize=groupsize)
-        z = torch.zeros(s.shape,dtype = torch.half, device=DEV)
+        #z = torch.zeros(s.shape,dtype = torch.half, device=DEV)
         #B_ref, B1, B2, s = gen_quant4(k, n, groupsize=groupsize)
         #ref3, ref4, q4, q1, q2, s4, s3 = gen_quant4and3(m, n, groupsize=-1)
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
@@ -87,7 +88,7 @@ class Test(unittest.TestCase):
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
     
     def test_tiles(self):
-        self.run_problem(16,14336,4096, 64, 256, 64)
+        self.run_problem(16, 256, 256, 64, 256, 64)
     
 if __name__ == '__main__':
     unittest.main()

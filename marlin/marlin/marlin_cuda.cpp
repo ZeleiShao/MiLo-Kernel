@@ -291,7 +291,6 @@ void mul_3bit_with_zero(
   if (workspace.numel() < prob_n / 128 * max_par){
     AT_ERROR("workspace must be of size at least ", prob_n / 128 * max_par, ".");
   }
-    
   int dev = A.get_device();
   int err = marlin_cuda_3bit_with_zero(
     A.data_ptr(),

@@ -419,13 +419,13 @@ class Layer3bitWithZero(nn.Module):
         self.register_buffer('B1', torch.empty((self.k // 16,2 * self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('B2', torch.empty((self.k // 16, self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('s', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
-        self.register_buffer('zeros', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
+        self.register_buffer('z', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
         # 128 is currently the minimum `tile_n`, hence it gives the maximum workspace size; 16 is the default `max_par`
         self.register_buffer('workspace', torch.zeros(self.n // 128 * 16, dtype=torch.int), persistent=False)
 
     def forward(self, A):
         C = torch.empty(A.shape[:-1] + (self.s.shape[1],), dtype=A.dtype, device=A.device)
-        mul_3bit_with_zero(A.view((-1, A.shape[-1])), self.B1, self.B2, C.view((-1, C.shape[-1])), self.s, self.zeros, self.workspace)
+        mul_3bit_with_zero(A.view((-1, A.shape[-1])), self.B1, self.B2, C.view((-1, C.shape[-1])), self.s, self.z, self.workspace)
         return C
 
     def pack(self, linear, scales, zeros):
@@ -446,7 +446,6 @@ class Layer3bitWithZero(nn.Module):
             w = w.reshape((self.groupsize, -1)) # (self.group_size, k/group_size * n)
             s = s.reshape((1, -1)) 
             z = z.reshape((1, -1)) 
-
         w = torch.round((w - z) / s).int()
         w = torch.clamp(w, 0, maxq)
         if self.groupsize != self.k:
@@ -458,11 +457,12 @@ class Layer3bitWithZero(nn.Module):
         else:
             s = s.reshape((-1, len(_scale_perm_single)))[:, _scale_perm_single]
             z = z.reshape((-1, len(_scale_perm_single)))[:, _scale_perm_single]
+
         s = s.reshape((-1, self.n)).contiguous()
         z = z.reshape((-1, self.n)).contiguous()
         w = w.reshape((self.k // tile, tile, self.n // tile, tile))
         w = w.permute((0, 2, 1, 3))
-        w = w.reshape((self.k // tile, self.n * tile)) 
+        w = w.reshape((self.k // tile, self.n * tile))
         res = w
         res = res.reshape((-1, _perm.numel()))[:, _perm].reshape(res.shape)
         q1 = np.zeros((res.shape[0], 2 * res.shape[1]//32), dtype=np.uint32)
@@ -492,7 +492,7 @@ class Layer3bitWithZero(nn.Module):
         self.B1[:, :] = q1.to(self.B1.device)
         self.B2[:, :] = q2.to(self.B2.device)
         self.s[:, :] = s.to(self.s.device)
-        self.zeros[:, :] = z.to(self.zeros.device)
+        self.z[:, :] = z.to(self.z.device)
 
 
 class Layer3bit256_64(nn.Module):
