@@ -16,7 +16,6 @@ torch.backends.cudnn.allow_tf32 = False
 
 
 class GPTQ:
-
     def __init__(self, layer, stable=False):
         self.layer = layer
         self.dev = self.layer.weight.device
@@ -25,7 +24,6 @@ class GPTQ:
         self.columns = W.shape[1]
         self.H = torch.zeros((self.columns, self.columns), device=self.dev)
         self.nsamples = 0
-
         self.stable = stable
         self.mean = torch.zeros((self.columns, 1), device=self.dev)
 

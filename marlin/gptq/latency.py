@@ -1,12 +1,9 @@
-import time
-
 import torch
-import torch.nn as nn
+import marlin
+import time
 
 from gptq import *
 from quant import *
-import marlin
-
 
 DEV = torch.device('cuda:0')
 
@@ -20,19 +17,18 @@ def find_layers(module, layers=[nn.Conv2d, nn.Linear], name=''):
         ))
     return res
 
-
 def get_llama(name):
-    import torch
     def skip(*args, **kwargs):
         pass
     torch.nn.init.kaiming_uniform_ = skip
     torch.nn.init.uniform_ = skip
     torch.nn.init.normal_ = skip
-    from transformers import LlamaForCausalLM
+    from transformers import LlamaForCausalLM, AutoTokenizer
     model = LlamaForCausalLM.from_pretrained(name, torch_dtype='auto')
+    tokenizer = AutoTokenizer.from_pretrained(name)
     model.config.pretraining_tp = 1
     model.seqlen = 4096 
-    return model
+    return model, tokenizer
 
 @torch.no_grad()
 def llama_sequential(model, dataloader, dev):
@@ -67,12 +63,10 @@ def llama_sequential(model, dataloader, dev):
         except ValueError:
             pass
     layers[0] = layers[0].module
-
     layers[0] = layers[0].cpu()
     model.model.embed_tokens = model.model.embed_tokens.cpu()
     model.model.norm = model.model.norm.cpu()
     torch.cuda.empty_cache()
-
     print('Ready.')
 
     quantizers = {}
@@ -137,75 +131,6 @@ def llama_sequential(model, dataloader, dev):
     model.config.use_cache = use_cache
     return quantizers
 
-@torch.no_grad()
-def llama_eval(model, dataloader, dev):
-    print('Evaluating ...')
-
-    nsamples = len(dataloader) 
-
-    use_cache = model.config.use_cache
-    model.config.use_cache = False
-    layers = model.model.layers
-
-    model.model.embed_tokens = model.model.embed_tokens.to(dev)
-    layers[0] = layers[0].to(dev)
-
-    dtype = next(iter(model.parameters())).dtype
-    inps = []
-    attention_masks = []
-    position_ids = []
-
-    class Catcher(nn.Module):
-        def __init__(self, module):
-            super().__init__()
-            self.module = module
-        def forward(self, inp, **kwargs):
-            inps.append(inp)
-            attention_masks.append(kwargs['attention_mask'])
-            position_ids.append(kwargs['position_ids'])
-            raise ValueError
-    layers[0] = Catcher(layers[0])
-    for batch in dataloader:
-        try:
-            model(batch.to(dev))
-        except ValueError:
-            pass
-    layers[0] = layers[0].module
-
-    layers[0] = layers[0].cpu()
-    model.model.embed_tokens = model.model.embed_tokens.cpu()
-    torch.cuda.empty_cache()
-
-    for i in range(len(layers)):
-        print(i)
-        layer = layers[i].to(dev)
-        for j in range(nsamples):
-            inps[j] = layer(inps[j], attention_mask=attention_masks[j], position_ids=position_ids[j])[0]
-        layers[i] = layer.cpu()
-        del layer
-        torch.cuda.empty_cache()
-
-    if model.model.norm is not None:
-        model.model.norm = model.model.norm.to(dev)
-    model.lm_head = model.lm_head.to(dev)
-
-    nlls = []
-    for i in range(nsamples):
-        hidden_states = inps[i]
-        if model.model.norm is not None:
-            hidden_states = model.model.norm(hidden_states)
-        lm_logits = model.lm_head(hidden_states)
-        shift_logits = lm_logits[:, :-1, :].contiguous()
-        shift_labels = (dataloader[i].to(dev))[:, 1:]
-        loss_fct = nn.CrossEntropyLoss()
-        loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-        neg_log_likelihood = loss.float() * model.seqlen
-        nlls.append(neg_log_likelihood)
-    ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
-    print(ppl.item())
-
-    model.config.use_cache = use_cache
-
 def llama_pack(model, quantizers):
     layers = find_layers(model)
     layers = {n: layers[n] for n in quantizers}
@@ -221,6 +146,33 @@ def llama_pack(model, quantizers):
     print('Done.')
     return model
 
+def test_latency(model, tokenizer):
+    gen_length = 20
+
+    with torch.inference_mode():
+        for i in range(gen_length):
+            torch.cuda.synchronize()
+            t_st = time.perf_counter()
+
+            if i == 0:
+                inputs = torch.as_tensor([input_ids], device=device)
+            else:
+                inputs = torch.as_tensor([[token]], device=device)
+            out = model(inputs, start_pos=start_pos)
+            start_pos += out.shape[1]
+
+            torch.cuda.synchronize()
+            t_ed = time.perf_counter()
+            time_lis.append(t_ed - t_st)
+            token = out[:, -1].max(1)[1].unsqueeze(1)
+            if args.verbose:
+                print(i, np.median(time_lis))
+
+    print(f"Speed: {1 / np.median(time_lis)} tokens per second.")
+
+    
+    latency = end_time - start_time
+    print()
 
 if __name__ == '__main__':
     import argparse
@@ -282,25 +234,16 @@ if __name__ == '__main__':
     if args.nearest:
         args.nsamples = 0
 
-    model = get_llama(args.model)
-    model.eval()
+    model,tokenizer = get_llama(args.model)
 
-    dataloader, testloader = get_loaders(
-        args.dataset, nsamples=args.nsamples, seed=args.seed, model=args.model, seqlen=model.seqlen
-    )
 
     if args.wbits < 16:
         tick = time.time()
         quantizers = llama_sequential(model, dataloader, DEV)
         print(time.time() - tick)
 
-    datasets = ['wikitext2', 'red'] 
-    for dataset in datasets:
-        dataloader, testloader = get_loaders(
-            dataset, seed=args.seed, model=args.model, seqlen=model.seqlen
-        )
-        print(dataset)
-        llama_eval(model, testloader, DEV)
+    
+    test_latency(model,tokenizer)
 
     if args.save:
         args.save += '.marlin3bit'

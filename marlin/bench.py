@@ -7,7 +7,7 @@ import marlin
 
 import time
 
-def benchmark(f, warmup=1, iter=20):
+def benchmark(f, warmup=3, iter=30):
     for i in range(warmup + iter):
         f()
         # We do not synchronize here in order to hide the kernel launch overhead during benchmarkining as this will also
@@ -30,12 +30,12 @@ def get_problem(m, n, k, groupsize=64):
     B = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
     B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
     C = torch.zeros((m, n), dtype=torch.half, device=dev)
-    s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
+    s = torch.ones((k // groupsize, n), dtype=torch.half, device=dev)
     z = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
     torch.cuda.synchronize()
     return A, B, C, B_ref, s, z
 
-def get_problem_int3(m, n, k, groupsize=64):
+def get_problem_int3(m, n, k, groupsize=64, tile_shape=0):
     if groupsize == -1:
         groupsize = k
     dev = torch.device('cuda:0')
@@ -44,12 +44,12 @@ def get_problem_int3(m, n, k, groupsize=64):
     B2 = torch.randint(low=-2**31, high=2**31, size=(k * n // 32,), device=dev)
     B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
     C = torch.zeros((m, n), dtype=torch.half, device=dev)
-    s = torch.ones((k // groupsize, n), dtype=torch.half, device=dev)
-    z = torch.ones((k // groupsize, n), dtype=torch.half, device=dev)
+    s = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
+    z = torch.zeros((k // groupsize, n), dtype=torch.half, device=dev)
     torch.cuda.synchronize()
     return A, B1, B2, C, B_ref, s, z
 
-def gen_quant3(m, n, groupsize=-1):
+def gen_quant3(m, n, groupsize=-1, tile_shape=0):
     maxq = 2 ** 3 - 1
     dev = torch.device('cuda:0')
     w = torch.randn((m, n), dtype=torch.half, device=dev)
@@ -64,6 +64,8 @@ def gen_quant3(m, n, groupsize=-1):
     w += (maxq + 1) // 2
     w = torch.clamp(w, 0, maxq)
     ref = (w - (maxq + 1) // 2).half() * s
+    z = torch.randn(s.shape)
+    #ref = w.half() * s + z
     #ref = w
     if groupsize != -1:
         def reshape(w):
@@ -75,13 +77,16 @@ def gen_quant3(m, n, groupsize=-1):
         w = reshape(w)
 
     s = s.reshape((-1, n)).contiguous()
-    z = torch.randn(s.shape)
     linear = nn.Linear(m, n)
     linear.weight.data = ref.t()
+
     # Workaround to test some special cases that are forbidden by the API
-    #layer = marlin.Layer3bit(256, 256, groupsize=groupsize)
+    layer = marlin.Layer3bit(m, n, groupsize=groupsize, tile_shape = tile_shape)
     #layer = marlin.Layer3bitFaster(m, n, groupsize=groupsize)
-    layer = marlin.Layer3bitWithZero(m, n, groupsize=groupsize)
+    #layer = marlin.Layer3bitWithZero(m, n, groupsize=groupsize)
+    #layer = marlin.Layer3bit256_64(m, n, groupsize=groupsize)
+    #layer = marlin.Layer3bit256_64_with_zero(m, n, groupsize=groupsize)
+
     if groupsize == -1:
         groupsize = m
     layer.k = m
@@ -91,7 +96,10 @@ def gen_quant3(m, n, groupsize=-1):
     layer.B2 = torch.empty((m // 16, n * 16 // 32), dtype=torch.int, device=dev)
     layer.s = torch.empty((m // groupsize, n), dtype=torch.half, device=dev)
     layer.z = torch.empty((m // groupsize, n), dtype=torch.half, device=dev)
-    layer.pack(linear, s.t(), z.t())
+    #layer.pack(linear, s.t(), z.t(),tile_shape)
+    #layer.pack(linear, s.t(), z.t())
+    layer.pack(linear, s.t(),tile_shape)
+    #layer.pack(linear, s.t())
     q1 = layer.B1
     q2 = layer.B2
     s = layer.s
@@ -110,22 +118,17 @@ def benchmark_dense(A, B, C):
 def benchmark_quant(A, B1, B2, C, s, z,thread_k, thread_n, sms):
     workspace = torch.zeros((C.shape[1] // 128) * 16, device=torch.device('cuda:0'))
     #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
-    res = benchmark(lambda: marlin.mul_3bit_with_zero(A, B1, B2, C, s, z, workspace, thread_k, thread_n, sms,16))
+    #res = benchmark(lambda: marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
+    #res = benchmark(lambda: marlin.mul_3bit_256_64(A, B1, B2, C, s, workspace, 256, 64, sms))
+    #res = benchmark(lambda: marlin.mul_3bit_256_64_with_zero(A, B1, B2, C, s,z, workspace, 256, 64, sms))
+    res = benchmark(lambda: marlin.mul_3bit_with_zero(A, B1, B2, C, s, z, workspace, thread_k, thread_n, sms))
     return {
         's': res,
         'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
         'GB/s': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / res / 10 ** 9
+
     }
 
-def benchmark_quant_4bit(A, B, C, s, thread_k, thread_n, sms):
-    workspace = torch.zeros(C.shape[1] // 128 * 16, device=torch.device('cuda:0'))
-    #res = benchmark(lambda: marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
-    res = benchmark(lambda: marlin.mul(A, B, C, s, workspace, thread_k, thread_n, sms, 64))
-    return {
-        's': res,
-        'TFLOP/s': 2 * A.numel() * C.shape[1] / res / 10 ** 12,
-        'GB/s': (2 * A.numel() + 4 * B.numel() + 2 * C.numel() + 2 * s.numel()) / res / 10 ** 9
-    }
 
 # Pass the SM count for known GPUs to avoid the kernel having to query this information (this is very minor)
 gpu = torch.cuda.get_device_name(0)
@@ -141,17 +144,50 @@ else:
     SMS = -1
 
 MODELS = {
- #   'ideal': [
-  #      (4 * 256 * SMS, 256 * SMS)
-   # ],
-'w1' : [(4096, 14336)],
-'w2' : [(14336, 4096)],
-'mixtual' : [(4096, 14336),(14336, 4096),(4096, 14336)],
-'ideal': [
-        (4 * 256 * SMS, 256 * SMS)
+#    'ideal': [
+#        (4 * 256 * SMS, 256 * SMS)
+# ],
+#    'w1' : [(4096, 14336)],
+#    'w2' : [(14336, 4096)],
+   'mixtual8x7B' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
+    'Llama7B': [
+        (4096, 3 * 4096),
+        (4096, 4096),
+        (4096, 2 * 10752),
+        (10752, 4096)
     ],
-'w3' : [(14848, 14848 * 5 + 1024)],
-#'w4' : [(14848 * 5, 14848)],
+    'Llama13B': [
+        (5120, 3 * 5120),
+        (5120, 5120),
+        (5120, 2 * 13568),
+        (13568, 5120)
+    ],
+    'Llama33B': [
+        (6656, 3 * 6656),
+        (6656, 6656),
+        (6656, 2 * 17664),
+        (17664, 6656)
+    ],
+    'Llama65B': [
+        (8192, 3 * 8192),
+        (8192, 8192),
+        (8192, 2 * 21760),
+        (21760, 8192)
+    ],
+    'Falcon180B': [
+        # Note that parallel attention and FC allows layer fusions
+        (14848, 14848 * 5 + 1024),
+        (14848 * 5, 14848)
+    ]
+
+#'w1' : [(4096, 14336)],
+#'w2' : [(14336, 4096)],
+#'mixtual' : [(4096, 14336),(14336, 4096),(4096, 14336)],
+#'ideal': [
+#        (4 * 256 * SMS, 256 * SMS)
+#    ],
+#'w3' : [(14848, 14848 * 5 + 1024)],
+#'w4' : [(14848 * 5+ 1024, 14848)],
 #'Falcon180B': [
 #       (14848, 14848 * 5 + 1024),
 #       (14848 * 5, 14848)
@@ -160,15 +196,6 @@ MODELS = {
 
 # Set to true in order to run a more complete benchmark sweep; the default is reproduce README experiments
 ALL = False
-"""batch = 16
-tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0} 
-#A, B1, B2, C, B_ref, s = get_problem_int3(16,4096, 14336,128)
-A, B1, B2, C, B_ref, s = get_problem_int3(16, 4096,1024,128)
-res_q = benchmark_quant(A, B1, B2, C, s, 64, 256,108)
-res_d = benchmark_dense(A, B_ref, C)
-res_q['speedup'] = res_d['s'] / res_q['s']
-print(res_q['speedup'])
-#for groupsize in [-1, 128] if ALL else [128]:"""
 
 for groupsize in [64] :
     print('groupsize=%d' % groupsize)
@@ -176,42 +203,43 @@ for groupsize in [64] :
     dev = torch.device('cuda:0')
     for model, layers in MODELS.items():
         print(model)
-        if ALL:
-            batchsizes =  [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
-        else:
-            batchsizes = [1, 2, 4, 8, 16, 32, 64, 128]
+        batchsizes = [1,16,32]
         for batch in batchsizes:
             if not ALL and model != 'ideal' and batch != 16:
                 continue
-            tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0} 
+            tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory(MB)' : 0}  
             for layer in layers:
-                A = torch.randn((batch, layer[0]), dtype=torch.half, device=dev)
-                #B_ref, B1, B2, s, z = gen_quant3(layer[0], layer[1], groupsize)
-                A, B1, B2, C, B_ref, s, z = get_problem_int3(batch, layer[1], layer[0], groupsize)
+                #B_ref, B1, B2, s, z = gen_quant3(layer[0], layer[1], groupsize, tile_shape)
+                tile_shape = 0
+                if layer[0] > layer[1] * 2 and layer[0] < 17000 and batch <= 16:
+                    tile_shape = 1
+                A, B1, B2, C, B_ref, s, z = get_problem_int3(batch, layer[1], layer[0], groupsize, tile_shape)
                 C = torch.zeros((batch,layer[1]), dtype=torch.half, device=dev)
                 res_d = benchmark_dense(A, B_ref, C)
                 #if model == 'ideal' and batch == 16:
                     # This is a special case constructed to be optimal for a thread-shape different than the default one
                     #res_q = benchmark_quant_4bit(A, B, C, s, 64, 256, SMS)
-                res_q = benchmark_quant(A, B1, B2, C, s,z, 64, 256, SMS)
+                res_q = benchmark_quant(A, B1, B2, C, s,z, -1, -1, SMS)
                 #else:
                 #res_q = benchmark_quant_4bit(A, B, C, s, -1, -1, SMS)
                 #res_q = benchmark_quant(A, B1, B2, C, s, -1, -1, SMS)
                 
                 res_q['speedup'] = res_d['s'] / res_q['s']
                 tot_q['s'] += res_q['s']
+                tot_q['memory(MB)'] += (4 * B1.numel() + 4 * B2.numel() + 2 * s.numel()) / 10 ** 6
                 for k in tot_q:
-                    if k != 's':
+                    if k != 's' and k != 'memory(MB)' :
                         tot_q[k] += res_q[k] * res_q['s']
                         
             for k in tot_q:
-                if k != 's':
+                if k != 's' and k != 'memory(MB)':
                     tot_q[k] /= tot_q['s']
-            print('batch=%04d: s=%.5f, TFLOP/s=%07.3f, GB/s=%08.3f, speedup=%.2f' % (
+            print('batch=%04d: s=%.5f, TFLOP/s=%07.3f, GB/s=%08.3f, speedup=%.2f, memory(MB)=%.2f' % (
                 batch,
                 tot_q['s'],
                 tot_q['TFLOP/s'],
                 tot_q['GB/s'],
-                tot_q['speedup']
+                tot_q['speedup'],
+                tot_q['memory(MB)']
             ))
         print()
