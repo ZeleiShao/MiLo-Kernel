@@ -305,7 +305,7 @@ __global__ void Marlin_3bit_64_256_with_zero(
   int s_sh_stride = 16 * thread_n_blocks / 8;
   int s_sh_stage = s_sh_stride * ceildiv(thread_k_blocks,group_blocks);
   int s_gl_rd_delta = s_gl_stride * ceildiv(thread_k_blocks,group_blocks);
-  int s_sh_rd_delta = 8 * (thread_n_blocks / 4) * (thread_k_blocks / b_sh_wr_iters / group_blocks);
+  int s_sh_rd_delta =( threads / 32 ) / (thread_n_blocks / 4) / group_blocks;
 
   int a_gl_rd = a_gl_stride * (threadIdx.x / a_gl_rd_delta_o) + (threadIdx.x % a_gl_rd_delta_o);// Global A read index of current thread.
   a_gl_rd += a_gl_rd_delta_o * slice_row;
@@ -330,11 +330,10 @@ __global__ void Marlin_3bit_64_256_with_zero(
   bool B_sh_wr_pred = B1_sh_wr_pred || B2_sh_wr_pred;
 
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks) + s_sh_stage * slice_col + threadIdx.x;
-
   int s_sh_wr = threadIdx.x; //threadIdx.x
-  int z_sh_wr = threadIdx.x - 32;
+  //int z_sh_wr = threadIdx.x - 32;
   int s_sh_rd;
-  s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
+  s_sh_rd = 8 * (thread_n_blocks / 4) * ((threadIdx.x / 32) / (thread_n_blocks / 4) / group_blocks) + 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4;
 
     // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
   // required for a certain tilesize or when the batchsize is not a multiple of 16.
@@ -343,8 +342,8 @@ __global__ void Marlin_3bit_64_256_with_zero(
   for (int i = 0; i < a_sh_wr_iters; i++)
     a_sh_wr_pred[i] = a_sh_wr_delta * i + a_sh_wr < a_sh_stride * prob_m;
   //bool s_sh_wr_pred = threadIdx.x >= 96 && threadIdx.x <= 127;
-  bool s_sh_wr_pred = threadIdx.x >=  96 && threadIdx.x < 128; //fetch to shared pred
-  bool z_sh_wr_pred = threadIdx.x >= 224 && threadIdx.x < 256; //fetch to shared pred
+  bool s_sh_wr_pred = threadIdx.x < s_sh_stage; //fetch to shared pred
+  bool z_sh_wr_pred = threadIdx.x < s_sh_stage; //fetch to shared pred
 
   // To ensure that writing and reading A tiles to/from shared memory, the latter in fragment format, is fully bank
   // conflict free, we need to use a rather fancy XOR-based layout. The key here is that neither reads nor writes of 
@@ -415,14 +414,10 @@ __global__ void Marlin_3bit_64_256_with_zero(
       }   
       int4* sh_b1_stage = sh_b1 + (b_sh_stage/2) * pipe;
       int4* sh_b2_stage = sh_b2 + (b_sh_stage/4) * pipe; 
-      int4* sh_s_stage = sh_s + s_sh_stage * pipe;
-      int4* sh_z_stage = sh_z + s_sh_stage * pipe;   
       #pragma unroll
       for (int i = 0; i < b_sh_wr_iters; i++) {
         int4* share_B = sh_b1_stage;
         const int4* B_ptr = B1_ptr[i];
-        int4* sh_s_stage = sh_s + s_sh_stage * pipe;
-        int4* sh_z_stage = sh_z + s_sh_stage * pipe;
         if (B1_sh_wr_pred){
           share_B = &sh_b1_stage[ (b_sh_wr_delta/2) * i + b1_sh_wr];
           B_ptr = B1_ptr[i];      
@@ -435,17 +430,20 @@ __global__ void Marlin_3bit_64_256_with_zero(
         B1_ptr[i] += b_gl_rd_delta_o/2;
         B2_ptr[i] += b_gl_rd_delta_o/4;
       }
+    int4* sh_s_stage = sh_s + s_sh_stage * pipe;
+    int4* sh_z_stage = sh_z + s_sh_stage * pipe;   
 
+/*
       const int4* g = &s[s_gl_rd-96];
       int4* share = &sh_s_stage[s_sh_wr-96];
       if (z_sh_wr_pred){
         g = &zero[s_gl_rd-224];
         share = &sh_z_stage[s_sh_wr-224];
-      }
-      cp_async4_pred(share,g, s_sh_wr_pred|z_sh_wr_pred);
-        //cp_async4_stream(&sh_s_stage[s_sh_wr], &s[s_gl_rd]);*/
+      }*/
+      //cp_async4_pred(share,g, s_sh_wr_pred|z_sh_wr_pred);
 
-        //cp_async4_pred(&sh_z_stage[s_sh_wr-224], &zero[s_gl_rd-224], z_sh_wr_pred); 
+      cp_async4_pred(&sh_z_stage[s_sh_wr], &zero[s_gl_rd], s_sh_wr_pred); 
+      cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd], s_sh_wr_pred);
       s_gl_rd += s_gl_rd_delta;
     }
     // Insert a fence even when we are winding down the pipeline to ensure that waiting is also correct at this point.
@@ -469,6 +467,7 @@ __global__ void Marlin_3bit_64_256_with_zero(
       //int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
     int4* sh_s_stage = sh_s + s_sh_stage * pipe;
     reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
+    
     int4* sh_z_stage = sh_z + s_sh_stage * pipe;
     reinterpret_cast<int4*>(&frag_z[k % 2])[0] = sh_z_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;

@@ -151,6 +151,30 @@ __device__ inline FragB dequant(int q) {
   return frag_b;
 }
 
+__device__ inline FragB dequant_for_bf16(int q) {
+  const int LO = 0x000f000f;
+  const int HI = 0x00f000f0;
+  const int EX = 0x64006400;
+  // Guarantee that the `(a & b) | c` operations are LOP3s.
+  int lo = lop3<(0xf0 & 0xcc) | 0xaa>(q, LO, EX);
+  q = q >> 4;
+  int hi = lop3<(0xf0 & 0xcc) | 0xaa>(q, LO, EX);
+  // We want signed int4 outputs, hence we fuse the `-8` symmetric zero point directly into `SUB` and `ADD`.
+  const int SUB = 0x64086408;
+  const int MUL = 0x2c002c00;
+  const int ADD = 0xd480d480;
+  FragB frag_b;
+  frag_b[0] = __hsub2(
+    *reinterpret_cast<half2*>(&lo),
+    *reinterpret_cast<const half2*>(&SUB)
+  );
+  frag_b[1] = __hfma2(
+    *reinterpret_cast<half2*>(&hi),
+    *reinterpret_cast<const half2*>(&MUL), *reinterpret_cast<const half2*>(&ADD)
+  );
+  return frag_b;
+}
+
 // Multiply dequantized values by the corresponding quantization scale; used only for grouped quantization.
 __device__ inline void scale(FragB& frag_b, FragS& frag_s, int i) {
   half2 s = __half2half2(reinterpret_cast<__half*>(&frag_s)[i]);
@@ -445,11 +469,13 @@ __global__ void Marlin(
     for (int j = 0; j < 4; j++) {
       int b_quant = frag_b_quant[k % 2][j];
       int b_quant_shift = b_quant >> 8;
-      FragB frag_b0 = dequant(b_quant);
+      //FragB frag_b0 = dequant(b_quant);
+      FragB frag_b0 = dequant_for_bf16(b_quant);
       // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
       if (group_blocks != -1)
         scale(frag_b0, frag_s[k % 2][j], 0);
-      FragB frag_b1 = dequant(b_quant_shift);
+      //FragB frag_b1 = dequant(b_quant_shift);
+      FragB frag_b1 = dequant_for_bf16(b_quant_shift);
       if (group_blocks != -1)
         scale(frag_b1, frag_s[k % 2][j], 1);
       #pragma unroll

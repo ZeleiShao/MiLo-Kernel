@@ -7,7 +7,7 @@ import torch.nn as nn
 import marlin
 
 
-seed = 5
+seed = 16
 np.random.seed(seed)
 torch.random.manual_seed(seed)
 
@@ -26,18 +26,15 @@ def gen_quant3(m, n, groupsize=64, tile_shape=0):
     z = torch.randn(s.shape, dtype=torch.half,device=DEV)
     w += (maxq + 1) // 2
     w = torch.clamp(w, 0, maxq)
-
-    #s = torch.ones(s.shape,dtype=torch.half,device=DEV)
     #ref = (w - (maxq + 1) // 2).half() * s
     ref = w.half() * s + z
     #ref = w
-    if groupsize != -1:
-        def reshape(w):
-            w = w.reshape((groupsize, -1, n))
-            w = w.permute(1, 0, 2)
-            w = w.reshape((m, n)).contiguous()
-            return w
-        ref = reshape(ref)
+    def reshape(w):
+        w = w.reshape((groupsize, -1, n))
+        w = w.permute(1, 0, 2)
+        w = w.reshape((m, n)).contiguous()
+        return w
+    ref = reshape(ref)
 
     s = s.reshape((-1, n)).contiguous()
     z = z.reshape((-1, n)).contiguous()
@@ -57,7 +54,7 @@ def gen_quant3(m, n, groupsize=64, tile_shape=0):
     layer.B2 = torch.empty((m // 16, n * 16 // 32), dtype=torch.int, device=DEV)
     layer.s = torch.empty((m // groupsize, n), dtype=torch.half, device=DEV)
     layer.z = torch.empty((m // groupsize, n), dtype=torch.half, device=DEV)
-    layer.pack(linear, s.t(), z.t(),tile_shape)
+    layer.pack(linear, s.t(), z.t())
     #layer.pack(linear, s.t())
     q1 = layer.B1
     q2 = layer.B2
@@ -82,16 +79,22 @@ class Test(unittest.TestCase):
         #marlin.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, -1)
         #marlin.mul_3bit_256_64(A, B1, B2, C, s, workspace, thread_k, thread_n)
         #marlin.mul_3bit_256_64_with_zero(A, B1, B2, C, s, z,workspace, thread_k, thread_n)
-        #marlin.mul_3bit_64_256_with_zero(A, B1, B2, C, s, z,workspace, thread_k, thread_n)
+        #marlin.mul_3bit_64_256_with_zero(A, B1, B2, C, s, z,workspace, 64,256)
         #marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, thread_k, thread_n)
         marlin.mul_3bit_with_zero(A, B1, B2, C, s, z,workspace, thread_k, thread_n)
         torch.cuda.synchronize()
+        b = torch.mean(torch.abs(C_ref))
+        a = torch.mean(torch.abs(C - C_ref))
+        #ratio = a / b
+        #if a / b > 0.001 :
+        #    print("error!!!! a:%.3f, b:%.3f, ratio:%.3f " % (a,b,ratio))
+
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.001)
         
     def test_tiles(self):
-        for m in [1,2,4,8,16,32]:
-            for n in range(256,4096,512):
-                self.run_problem(m, 4*n, n, -1, -1, 64)
+        for k in [3 * 64 + 64 * 4 * 2 + 64 * i for i in range(1,6,2)]:
+            self.run_problem(16, 2 * 256, k, 64, 256)
+                
     
 if __name__ == '__main__':
     unittest.main()

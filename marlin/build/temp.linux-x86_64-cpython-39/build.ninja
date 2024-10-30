@@ -3,9 +3,9 @@ cxx = /sw/spack/deltas11-2023-03/apps/linux-rhel8-x86_64/gcc-8.5.0/gcc-11.4.0-yy
 nvcc = /sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-12.3.0-okhhaic/bin/nvcc
 
 cflags = -Wno-unused-result -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /u/zshao3/anaconda3/envs/marlin_env/include -I/u/zshao3/anaconda3/envs/marlin_env/include -fPIC -O2 -isystem /u/zshao3/anaconda3/envs/marlin_env/include -fPIC -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include/torch/csrc/api/include -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include/TH -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include/THC -I/sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-12.3.0-okhhaic/include -I/u/zshao3/anaconda3/envs/marlin_env/include/python3.9 -c
-post_cflags = -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=quant_cuda -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++17
+post_cflags = -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=marlin_cuda -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++17
 cuda_cflags = -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include/torch/csrc/api/include -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include/TH -I/u/zshao3/anaconda3/envs/marlin_env/lib/python3.9/site-packages/torch/include/THC -I/sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-12.3.0-okhhaic/include -I/u/zshao3/anaconda3/envs/marlin_env/include/python3.9 -c
-cuda_post_cflags = -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=quant_cuda -D_GLIBCXX_USE_CXX11_ABI=0 -gencode=arch=compute_80,code=compute_80 -gencode=arch=compute_80,code=sm_80 -ccbin /sw/spack/deltas11-2023-03/apps/linux-rhel8-x86_64/gcc-8.5.0/gcc-11.4.0-yycklku/bin/gcc -std=c++17
+cuda_post_cflags = -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=marlin_cuda -D_GLIBCXX_USE_CXX11_ABI=0 -gencode=arch=compute_80,code=compute_80 -gencode=arch=compute_80,code=sm_80 -ccbin /sw/spack/deltas11-2023-03/apps/linux-rhel8-x86_64/gcc-8.5.0/gcc-11.4.0-yycklku/bin/gcc -std=c++17
 cuda_dlink_post_cflags = 
 ldflags = 
 
@@ -23,8 +23,14 @@ rule cuda_compile
 
 
 
-build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/gptq_3bit.o: compile /u/zshao3/int3marlin/marlin/marlin/gptq_3bit.cpp
-build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/gptq_3bitkernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/gptq_3bitkernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_256_64_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_256_64_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_256_64_with_zero_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_256_64_with_zero_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_64_256_with_zero_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_64_256_with_zero_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_cuda_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_cuda_kernel_faster.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_cuda_kernel_faster.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_3bit_with_zero_cuda_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_3bit_with_zero_cuda_kernel.cu
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_cuda.o: compile /u/zshao3/int3marlin/marlin/marlin/marlin_cuda.cpp
+build /u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-39/marlin/marlin_cuda_kernel.o: cuda_compile /u/zshao3/int3marlin/marlin/marlin/marlin_cuda_kernel.cu
 
 
 

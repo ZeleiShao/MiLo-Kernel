@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: marlin3bit
+Version: 0.1.1
+Summary: Highly optimized FP16xINT3 CUDA matmul kernel.
+Author: Elias Frantar
+Author-email: elias.frantar@ist.ac.at
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: torch

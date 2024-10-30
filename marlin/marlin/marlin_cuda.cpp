@@ -230,7 +230,13 @@ void mul_3bit(
     AT_ERROR("workspace must be of size at least ", prob_n / 128 * max_par, ".");
   int dev = A.get_device();
   int err;
-  if (prob_k > prob_n * 2 && prob_k < 17000 && prob_m < 17){
+  int pack = 0;
+  int selection = 0;
+  if ((prob_k > prob_n * 3 && prob_k < 17000) || (prob_n % 256 != 0))
+    selection = 1;
+  if (prob_k % 256 != 0)
+    selection = 0;
+  if (selection==1){
     err = marlin_cuda_3bit_256_64(
     A.data_ptr(),
     B1.data_ptr(),
@@ -242,8 +248,8 @@ void mul_3bit(
     groupsize,
     dev,
     at::cuda::getCurrentCUDAStream(dev),
-    thread_k,
-    thread_n,
+    256,
+    64,
     sms,
     max_par
   );
@@ -260,14 +266,14 @@ void mul_3bit(
     groupsize,
     dev,
     at::cuda::getCurrentCUDAStream(dev),
-    thread_k,
-    thread_n,
+    64,
+    256,
     sms,
     max_par
   );
   }
   if (err == ERR_PROB_SHAPE) {
-    printf("groupsize : %d", groupsize);
+    //printf("groupsize : %d", groupsize);
     AT_ERROR(
       "Problem (m=", prob_m, ", n=", prob_n, ", k=", prob_k, ")",
       " not compatible with thread_k=", thread_k, ", thread_n=", thread_n, "."
@@ -303,7 +309,14 @@ void mul_3bit_with_zero(
   }
   int dev = A.get_device();
   int err;
-  if (prob_k > prob_n * 2 && prob_k < 17000 && prob_m < 17){
+  int selection = 0;
+  if ((prob_k > prob_n * 3 && prob_k < 17000) || (prob_n % 256 != 0))
+    selection = 1;
+  if (prob_k % 256 != 0)
+    selection = 0;
+  //int selection = (prob_k > prob_n * 3) ? 1 : 0;
+  if (selection == 1){
+    //printf("256 64 \n");
     err = marlin_cuda_3bit_256_64_with_zero(
     A.data_ptr(),
     B1.data_ptr(),
@@ -316,13 +329,14 @@ void mul_3bit_with_zero(
     groupsize,
     dev,
     at::cuda::getCurrentCUDAStream(dev),
-    thread_k,
-    thread_n,
+    256,
+    64,
     sms,
     max_par
   );
   }
   else{
+    //printf("64 256 \n");
     err = marlin_cuda_3bit_64_256_with_zero(
     A.data_ptr(),
     B1.data_ptr(),
@@ -335,8 +349,8 @@ void mul_3bit_with_zero(
     groupsize,
     dev,
     at::cuda::getCurrentCUDAStream(dev),
-    thread_k,
-    thread_n,
+    64,
+    256,
     sms,
     max_par
   );

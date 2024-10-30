@@ -242,3 +242,99 @@ __global__ void VecQuant3MatMulKernelFaster(
 
   atomicAdd(&mul[col], res);
 }
+
+using FragB = Vec<half2, 2>;
+__device__ inline FragB dequant(int& q) {
+  const int LO = 0x00070007;
+  const int HI = 0x00380038;
+  const int EX = 0x64006400;
+  // Guarantee that the `(a & b) | c` operations are LOP3s.
+  int lo = lop3<(0xf0 & 0xcc) | 0xaa>(q, LO, EX);
+  int hi = lop3<(0xf0 & 0xcc) | 0xaa>(q, HI, EX);
+  // We want signed int4 outputs, hence we fuse the `-4` symmetric zero point directly into `SUB` and `ADD`.
+  const int SUB = 0x64046404;
+  const int MUL = 0x30003000;
+  const int ADD = 0xd820d820;
+  FragB frag_b;  
+  frag_b[0] = __hsub2(
+    *reinterpret_cast<half2*>(&lo),
+    *reinterpret_cast<const half2*>(&SUB)
+  );
+  frag_b[1] = __hfma2(
+    *reinterpret_cast<half2*>(&hi),
+    *reinterpret_cast<const half2*>(&MUL), *reinterpret_cast<const half2*>(&ADD)
+  );
+  return frag_b;
+}
+
+__global__ void VecQ3MatMul(
+    const  half2* __restrict__ vec,
+    const    int* __restrict__ mat,
+           float* __restrict__ mul,
+    const  float* __restrict__ scales,
+    const  float* __restrict__ zeros,
+    int height,
+    int width
+) {
+  const int blockwidth2 = BLOCKWIDTH / 2;
+
+  int row = BLOCKHEIGHT * blockIdx.x;
+  int col = BLOCKWIDTH * blockIdx.y + threadIdx.x;
+
+  __shared__ half2 blockvec[blockwidth2];
+  if (threadIdx.x < blockwidth2)
+    blockvec[threadIdx.x] = vec[(row / BLOCKHEIGHT) * blockwidth2 + threadIdx.x];
+
+
+  half2 scale = __float2half2_rn(scales[col]);
+  half2 zero = __float2half2_rn(-zeros[col]);
+
+  int i = width * row + col;
+  int k = 0;
+
+  float res = 0;
+  half2 res2;
+
+  unsigned int tmp1;
+  unsigned int tmp2;
+  unsigned int tmp;
+
+  __syncthreads();
+
+  while (k < blockwidth2) {
+    res2 = {};
+    tmp1 = as_unsigned(mat[i]);
+ 
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >>  0) & 0x3f][off], scale, zero), blockvec[k + 0], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >>  6) & 0x3f][off], scale, zero), blockvec[k + 1], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >> 12) & 0x3f][off], scale, zero), blockvec[k + 2], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >> 18) & 0x3f][off], scale, zero), blockvec[k + 3], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >> 24) & 0x3f][off], scale, zero), blockvec[k + 4], res2);
+    i += width;
+    tmp2 = as_unsigned(mat[i]);
+    tmp = (tmp1 >> 30) | ((tmp2 << 2) & 0x3c);
+    res2 = __hfma2(__hfma2(deq2[tmp][off], scale, zero), blockvec[k + 5], res2);
+    tmp2 >>= 4;
+    k += 6;
+    res2 = __hfma2(__hfma2(deq2[(tmp2 >>  0) & 0x3f][off], scale, zero), blockvec[k + 0], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp2 >>  6) & 0x3f][off], scale, zero), blockvec[k + 1], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp2 >> 12) & 0x3f][off], scale, zero), blockvec[k + 2], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp2 >> 18) & 0x3f][off], scale, zero), blockvec[k + 3], res2);
+    i += width;
+    tmp1 = as_unsigned(mat[i]);
+    tmp = (tmp2 >> 24) | ((tmp1 << 4) & 0x30);
+    res2 = __hfma2(__hfma2(deq2[tmp][off], scale, zero), blockvec[k + 4], res2);
+    tmp1 >>= 2;
+    k += 5;
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >>  0) & 0x3f][off], scale, zero), blockvec[k + 0], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >>  6) & 0x3f][off], scale, zero), blockvec[k + 1], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >> 12) & 0x3f][off], scale, zero), blockvec[k + 2], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >> 18) & 0x3f][off], scale, zero), blockvec[k + 3], res2);
+    res2 = __hfma2(__hfma2(deq2[(tmp1 >> 24) & 0x3f][off], scale, zero), blockvec[k + 4], res2);
+    i += width;
+    k += 5;
+    res += __half2float(res2.x) + __half2float(res2.y);
+  }
+
+  atomicAdd(&mul[col], res);
+}

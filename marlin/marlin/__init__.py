@@ -235,13 +235,18 @@ class Layer3bit(nn.Module):
         super().__init__()
         if groupsize != 64 :
             raise ValueError('Only groupsize 64 is supported.')
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if (infeatures % 64 != 0) or (outfeatures % 64 != 0) or (infeatures % 256 != 0 and outfeatures % 256 != 0 ):
+            raise ValueError('(64|infeatures & 256|outfeatures)  or (256|infeatures & 64|outfeatures)')
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures
         self.n = outfeatures
         self.groupsize = groupsize
+        self.tile_shape=0
+        if (self.k > self.n * 3 and self.k < 17000) or (self.n % 256 != 0):
+            self.tile_shape = 1
+        if (self.k % 256 != 0):
+            self.tile_shape = 0
         self.register_buffer('B1', torch.empty((self.k // 16,2 * self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('B2', torch.empty((self.k // 16, self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('s', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
@@ -252,11 +257,10 @@ class Layer3bit(nn.Module):
         mul_3bit(A.view((-1, A.shape[-1])), self.B1, self.B2, C.view((-1, C.shape[-1])), self.s, self.workspace)
         return C
 
-    def pack(self, linear, scales, tile_shape = 0):
+    def pack(self, linear, scales):
         """Pack a fake-quantized linear layer into this actual Marlin representation.
         @linear: fake-quantized `torch.nn.Linear` layer to convert (must be of type `torch.half`)
         @scales: corresponding quantization scales of shape `(infeatures, groups)`
-        @tile_shape: 0 means 64x256; 1 means 256x64
         """ 
         if linear.weight.dtype != torch.half:
             raise ValueError('Only `torch.half` weights are supported.')
@@ -281,7 +285,7 @@ class Layer3bit(nn.Module):
         res = w
         res = res.reshape((-1, _perm.numel()))[:, _perm].reshape(res.shape)
 
-        if tile_shape == 1:
+        if self.tile_shape == 1:
             s = s.reshape((-1, self.n)).contiguous()
             s = s.reshape(-1, 4, self.n//64, 64)
             s = s.permute((0,2,1,3)).contiguous()
@@ -336,8 +340,8 @@ class Layer3bitFaster(nn.Module):
         if groupsize != 64 :
             raise ValueError('Only groupsize 64 is supported.')
         #print("infeature: %d, outfeature: %d" % (infeatures, outfeatures))
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if (infeatures % 64 != 0) or (outfeatures % 64 != 0) or (infeatures % 256 != 0 and outfeatures % 256 != 0 ):
+            raise ValueError('(64|infeatures & 256|outfeatures)  or (256|infeatures & 64|outfeatures)')
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures
@@ -428,13 +432,18 @@ class Layer3bitWithZero(nn.Module):
         if groupsize != 64 :
             raise ValueError('Only groupsize 64 is supported.')
         #print("infeature: %d, outfeature: %d" % (infeatures, outfeatures))
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if (infeatures % 64 != 0) or (outfeatures % 64 != 0) or (infeatures % 256 != 0 and outfeatures % 256 != 0 ):
+            raise ValueError('(64|infeatures & 256|outfeatures)  or (256|infeatures & 64|outfeatures)')
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures
         self.n = outfeatures
         self.groupsize = groupsize
+        self.tile_shape = 0
+        if (self.k > self.n * 3 and self.k < 17000) or (self.n % 256 != 0):
+            self.tile_shape = 1
+        if (self.k % 256 != 0):
+            self.tile_shape = 0
         self.register_buffer('B1', torch.empty((self.k // 16,2 * self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('B2', torch.empty((self.k // 16, self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('s', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
@@ -447,7 +456,7 @@ class Layer3bitWithZero(nn.Module):
         mul_3bit_with_zero(A.view((-1, A.shape[-1])), self.B1, self.B2, C.view((-1, C.shape[-1])), self.s, self.z, self.workspace)
         return C
 
-    def pack(self, linear, scales, zeros, tile_shape=0):
+    def pack(self, linear, scales, zeros):
         """Pack a fake-quantized linear layer into this actual Marlin representation.
         @linear: fake-quantized `torch.nn.Linear` layer to convert (must be of type `torch.half`)
         @scales: corresponding quantization scales of shape `(infeatures, groups)`
@@ -486,7 +495,7 @@ class Layer3bitWithZero(nn.Module):
         res = w
         res = res.reshape((-1, _perm.numel()))[:, _perm].reshape(res.shape)
 
-        if tile_shape == 1:
+        if self.tile_shape == 1:
             s = s.reshape((-1, self.n)).contiguous()
             s = s.reshape(-1, 4, self.n//64, 64)
             s = s.permute((0,2,1,3)).contiguous()
@@ -539,13 +548,11 @@ class Layer3bit_64_256_WithZero(nn.Module):
         @groupsize: quantization groupsize (must be 64)
         """
         super().__init__()
-        if groupsize == -1:
-            groupsize = 64
         if groupsize != 64 :
             raise ValueError('Only groupsize 64 is supported.')
         #print("infeature: %d, outfeature: %d" % (infeatures, outfeatures))
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if (infeatures % 64 != 0) or (outfeatures % 64 != 0) or (infeatures % 256 != 0 and outfeatures % 256 != 0 ):
+            raise ValueError('(64|infeatures & 256|outfeatures)  or (256|infeatures & 64|outfeatures)')        
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures
@@ -555,7 +562,6 @@ class Layer3bit_64_256_WithZero(nn.Module):
         self.register_buffer('B2', torch.empty((self.k // 16, self.n * 16 // 32 ), dtype=torch.int))
         self.register_buffer('s', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
         self.register_buffer('z', torch.empty((self.k // groupsize, self.n), dtype=torch.half))
-        # 128 is currently the minimum `tile_n`, hence it gives the maximum workspace size; 16 is the default `max_par`
         self.register_buffer('workspace', torch.zeros(self.n // 128 * 16, dtype=torch.int), persistent=False)
 
     def forward(self, A):
@@ -581,6 +587,7 @@ class Layer3bit_64_256_WithZero(nn.Module):
             w = w.reshape((self.groupsize, -1)) # (self.group_size, k/group_size * n)
             s = s.reshape((1, -1)) 
             z = z.reshape((1, -1)) 
+            
         w = torch.round((w - z) / s).int()
         w = torch.clamp(w, 0, maxq)
         if self.groupsize != self.k:
@@ -639,12 +646,10 @@ class Layer3bit256_64(nn.Module):
         @groupsize: quantization groupsize (must be 64)
         """
         super().__init__()
-        if groupsize == -1:
-            groupsize = 64
         if groupsize != 64 :
             raise ValueError('Only groupsize 64 is supported.')
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if (infeatures % 64 != 0) or (outfeatures % 64 != 0) or (infeatures % 256 != 0 and outfeatures % 256 != 0 ):
+            raise ValueError('(64|infeatures & 256|outfeatures)  or (256|infeatures & 64|outfeatures)')        
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures
@@ -738,12 +743,11 @@ class Layer3bit256_64_with_zero(nn.Module):
         @groupsize: quantization groupsize (must be 64)
         """
         super().__init__()
-        if groupsize == -1:
-            groupsize = 64
+        
         if groupsize != 64 :
             raise ValueError('Only groupsize 64 is supported.')
-        if infeatures % 128 != 0 or outfeatures % 256 != 0:
-            raise ValueError('`infeatures` must be divisible by 128 and `outfeatures` by 256.')
+        if (infeatures % 64 != 0) or (outfeatures % 64 != 0) or (infeatures % 256 != 0 and outfeatures % 256 != 0 ):
+            raise ValueError('(64|infeatures & 256|outfeatures)  or (256|infeatures & 64|outfeatures)')        
         if infeatures % groupsize != 0:
             raise ValueError('`infeatures` must be divisible by `groupsize`.')
         self.k = infeatures

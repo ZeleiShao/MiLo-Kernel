@@ -139,9 +139,6 @@ __device__ inline FragB dequant_faster(int& q) {
   const int MUL = 0x30003000;
   const int ADD = 0xd820d820;
   FragB frag_b;
-  //frag_b[0] = *reinterpret_cast<half2*>(&lo);
-  //frag_b[1] = *reinterpret_cast<half2*>(&hi);
-  
   frag_b[0] = __hsub2(
     *reinterpret_cast<half2*>(&lo),
     *reinterpret_cast<const half2*>(&SUB)
@@ -672,9 +669,11 @@ __global__ void Marlin_3bit_faster(
     a_gl_rd += a_gl_rd_delta_o * (stages - 1);
   };
   start_pipes();
-  //int compute = 0, reduce = 0;
+  int block_reduce_time = 0;
+  int transfer_compute_time = 0;
   //printf(" here before loop \n");
   // Main loop.
+  int slices = slice_iters;
   while (slice_iters) {
     // We unroll over both the global fetch and the register load pipeline to ensure all shared memory accesses are
     // static. Note that both pipelines have even length meaning that the next iteration will always start at index 0.
@@ -711,48 +710,26 @@ __global__ void Marlin_3bit_faster(
     //printf("after mma & transfer \n");
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
     // readable, other ways of writing the loop seemed to noticeably worse performance after compliation.
-   //clock_t end1 = clock();
+    //clock_t end1 = clock();
+    //transfer_compute_time += end1 - start1;
+
     if (slice_iters == 0) {
-      //clock_t end1 = clock();
       cp_async_wait<0>();
-      //clock_t end2 = clock();
-      //int cp_async = end2 - end1;
-     //if(blockIdx.x == 0 && threadIdx.x == 0) printf("cp_async : %d\n",cp_async);
       bool last = slice_idx == slice_count - 1;
       // For per-column scales, we only fetch them here in the final step before write-out
-     //clock_t start1 = clock();
       thread_block_reduce();
-      //clock_t end1 = clock();
-      //int warp_reduce_time = end1-start1;
-      //if (blockIdx.x == 0 && threadIdx.x == 0) printf("warp_reduce_time : %d \n", warp_reduce_time);
-      
-      //clock_t start1 = clock();
+
+      //clock_t start2 = clock();
       if (slice_count > 1) { // only globally reduce if there is more than one block in a slice
-        //printf("thread %d, block %d, use the global_reduce \n",threadIdx.x, blockIdx.x);
-        //clock_t start1 = clock();
         barrier_acquire(&locks[slice_col], slice_idx);
-        //clock_t start1 = clock();
         global_reduce(slice_idx == 0, last);
         barrier_release(&locks[slice_col], last);
-        //clock_t end1 = clock();
-        //int block_reduce_time = end1-start1;
-        //if (blockIdx.x == 0 && threadIdx.x == 0) printf("block_reduce_time : %d \n", block_reduce_time);
       }
-      //clock_t end1 = clock();
-      //int block_reduce_time = end1-start1;
-      //if (blockIdx.x == 0 && threadIdx.x == 0) printf("block_reduce_time : %d \n", block_reduce_time);
-
-
+      //clock_t end2 = clock();
+      //block_reduce_time += end2 - start2;
       if (last) // only the last block in a slice actually writes the result
       {
-        //clock_t start1 = clock();
-
-        //if(blockIdx.x == 0 && threadIdx.x == 0)printf("time statistics : %d, %d,  %d \n",register_time,share_time,mma_time);
         write_result();
-        //clock_t end1 = clock();
-        //int write_time = end1-start1;
-        //if (blockIdx.x == 0 && threadIdx.x == 0) printf("write_time : %d \n", write_time);
-
       }
       //clock_t start1 = clock();
       slice_row = 0;
@@ -782,16 +759,9 @@ __global__ void Marlin_3bit_faster(
       //int final = end1-start1;
       //if (blockIdx.x == 0 && threadIdx.x == 0) printf("final_time : %d \n", final);
     }
-    //clock_t end2 = clock();
-    //compute += end1-start1;
-   //reduce += end2-end1;
-    //if(blockIdx.x == 0 && threadIdx.x == 0) printf("compute time : , reduce_time: %d \n",reduce);
-  //clock_t end1 = clock();
-  //int outer_cycle = end1 - start1;
-  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("outer_cycle: %d \n",outer_cycle);
+//if(blockIdx.x == 0 && threadIdx.x == 0) printf("outer_cycle: %d \n",outer_cycle);
   }
-  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("compute time : , reduce_time: %d \n",reduce);
-  
+  //if(blockIdx.x == 0 && threadIdx.x == 0) printf("slice_iters : %d ,block_reduce_time : %d,transfer_compute_time: %d \n",slices,block_reduce_time, transfer_compute_time);
 }
 
 // 8 warps are a good choice since every SM has 4 schedulers and having more than 1 warp per schedule allows some more

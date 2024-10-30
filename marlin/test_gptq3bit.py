@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 
 import quant_cuda
-
+print(quant_cuda.__file__)
 torch.backends.cuda.matmul.allow_tf32 = False
 torch.backends.cudnn.allow_tf32 = False
-
-print('Benchmarking OPT-175B FC2 matvec ...')
 
 
 def get_speed(M,N):
@@ -40,65 +38,29 @@ def get_speed(M,N):
         quant_cuda.vecquant3matmul_faster(vec, mat, mul, scales, zeros)
         torch.cuda.synchronize()
     time_3bit = (time.time() - tick) / COUNT
-    return time_fp16 , time_3bit
+    return time_fp16 , time_3bit, 2 * M * N / 10**12
 
 MODELS = {
-    'ideal': [
-        (4 * 256 * 108, 256 * 108)
- ],
-#    'w1' : [(4096, 14336)],
-#    'w2' : [(14336, 4096)],
- 'mixtual8x7B' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
- 
- 'Llama7B': [
-        (4096, 3 * 4096),
-        (4096, 4096),
-        (4096, 2 * 10752),
-        (10752, 4096)
-    ],
-    'Llama13B': [
-        (5120, 3 * 5120),
-        (5120, 5120),
-        (5120, 2 * 13568),
-        (13568, 5120)
-    ],
-    'Llama33B': [
-        (6656, 3 * 6656),
-        (6656, 6656),
-        (6656, 2 * 17664),
-        (17664, 6656)
-    ],
-    'Llama33B': [
-        (6656, 3 * 6656),
-        (6656, 6656),
-        (6656, 2 * 17664),
-        (17664, 6656)
-    ],
-    'Llama65B': [
-        (8192, 3 * 8192),
-        (8192, 8192),
-        (8192, 2 * 21760),
-        (21760, 8192)
-    ],
-    'Falcon180B': [
-        # Note that parallel attention and FC allows layer fusions
-        (14848, 14848 * 5 + 1024),
-        (14848 * 5, 14848)
-    ]
+   'deepseek' : [(2048, 11008),(11008,2048),(11008,2048)],
+   'mixtual' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
+   'arctic' : [(7168,4864),(4864, 7168),(4864, 7168)],
+    'Falcon180B1' : [(14848, 14848 * 5 + 1024),(14848 * 5, 14848)]
 }
 
 for model, layers in MODELS.items():
     print(model)
     tot_fp16 = 0
     tot_3bit = 0
+    tot_cal = 0
     fp16 = 0
     w3 = 0
     for layer in layers:
-        fp16, w3 = get_speed(layer[0],layer[1])
+        fp16, w3, cal = get_speed(layer[0],layer[1])
         tot_fp16 += fp16 
         tot_3bit += w3 
+        tot_cal += cal
 
-    speedup = tot_fp16 / tot_3bit
+    TFLOPS = tot_cal / tot_3bit
 
-    print("speedup=%.2f "%(speedup))
+    print("speedup=%.2f "%(TFLOPS))
 

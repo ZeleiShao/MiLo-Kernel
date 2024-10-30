@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+setup_deGE.py
+deGE_cuda.egg-info/PKG-INFO
+deGE_cuda.egg-info/SOURCES.txt
+deGE_cuda.egg-info/dependency_links.txt
+deGE_cuda.egg-info/top_level.txt
+marlin/dequant_GEMM.cpp
+marlin/dequant_GEMM_kernel.cu
