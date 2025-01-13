@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: milo_kernel
+Version: 0.1.1
+Summary: Optimized FP16xINT3 CUDA matmul kernel.
+Author: Zelei Shao
+Author-email: zelei2@illinois.edu
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: torch

@@ -1,0 +1,39 @@
+ninja_required_version = 1.3
+cxx = /scratch/bcjw/zshao3/anaconda3/envs/milo_env/bin/x86_64-conda-linux-gnu-c++
+nvcc = /sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-11.8.0-vfixfmc/bin/nvcc
+
+cflags = -DNDEBUG -fwrapv -O2 -Wall -fPIC -O2 -isystem /scratch/bcjw/zshao3/anaconda3/envs/milo_env/include -fPIC -O2 -isystem /scratch/bcjw/zshao3/anaconda3/envs/milo_env/include -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /scratch/bcjw/zshao3/anaconda3/envs/milo_env/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /scratch/bcjw/zshao3/anaconda3/envs/milo_env/include -fPIC -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include/torch/csrc/api/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include/TH -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include/THC -I/sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-11.8.0-vfixfmc/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/include/python3.11 -c
+post_cflags = -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1016"' -DTORCH_EXTENSION_NAME=milo_cuda -D_GLIBCXX_USE_CXX11_ABI=1 -std=c++17
+cuda_cflags = -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include/torch/csrc/api/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include/TH -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/lib/python3.11/site-packages/torch/include/THC -I/sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-11.8.0-vfixfmc/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_env/include/python3.11 -c
+cuda_post_cflags = -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -g -O0 -lineinfo -arch=sm_80 -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1016"' -DTORCH_EXTENSION_NAME=milo_cuda -D_GLIBCXX_USE_CXX11_ABI=1 -ccbin /scratch/bcjw/zshao3/anaconda3/envs/milo_env/bin/x86_64-conda-linux-gnu-cc -std=c++17
+cuda_dlink_post_cflags = 
+ldflags = 
+
+rule compile
+  command = $cxx -MMD -MF $out.d $cflags -c $in -o $out $post_cflags
+  depfile = $out.d
+  deps = gcc
+
+rule cuda_compile
+  depfile = $out.d
+  deps = gcc
+  command = $nvcc --generate-dependencies-with-compile --dependency-output $out.d $cuda_cflags -c $in -o $out $cuda_post_cflags
+
+
+
+
+
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/marlin_cuda_kernel.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/marlin_cuda_kernel.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_256_64_kernel.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/milo_3bit_256_64_kernel.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_256_64_with_zero_kernel.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/milo_3bit_256_64_with_zero_kernel.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_64_256_with_zero_kernel.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/milo_3bit_64_256_with_zero_kernel.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/milo_3bit_cuda_kernel.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/milo_3bit_cuda_kernel_faster.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_with_zero_cuda_kernel.o: cuda_compile /u/zshao3/milo/milo/milo_kernel/milo_3bit_with_zero_cuda_kernel.cu
+build /u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_cuda.o: compile /u/zshao3/milo/milo/milo_kernel/milo_cuda.cpp
+
+
+
+
+
+

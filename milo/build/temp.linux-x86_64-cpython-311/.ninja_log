@@ -1,0 +1,20 @@
+# ninja log v6
+9	20434	1735499549139042801	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_cuda.o	126a84c22ecd7e4a
+100	6659	1735499645744937212	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel.o	8828b7693b2c3803
+96	9468	1735499645741188859	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/marlin_cuda_kernel.o	6e36c5f38aa21c8e
+101	6270	1735499645746359514	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_with_zero_cuda_kernel.o	90d2aa9cf845b49e
+89	5952	1736393265912012762	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+98	3794	1735499645743463115	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_256_64_with_zero_kernel.o	19a9450b87d9ffd1
+99	6241	1735499645744231345	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_64_256_with_zero_kernel.o	3b003241010cacfd
+13460	19599	1736384478799874530	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_256_64_kernel.o	d942b4f1fbfbb139
+94	5498	1736393575068297953	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_256_64_kernel.o	d942b4f1fbfbb139
+98	8408	1736393575072907769	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+2865	13130	1736394819401316483	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_256_64_kernel.o	d942b4f1fbfbb139
+82	5248	1736394880723213841	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+137	4515	1736395193714191727	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+83	4375	1736395247650566365	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+79	4378	1736395292780758466	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+91	4386	1736395380742449214	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+80	4351	1736395438345035625	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+81	4344	1736395473553389520	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4
+96	4361	1736396076856577620	/u/zshao3/milo/milo/build/temp.linux-x86_64-cpython-311/milo_kernel/milo_3bit_cuda_kernel_faster.o	cebb089a8cd3b2f4

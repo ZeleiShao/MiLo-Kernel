@@ -1,0 +1,15 @@
+# ninja log v5
+6	8811	1733161404316737141	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_3bit_256_64_with_zero_kernel.o	ef38bb1a9f0ec652
+4	9366	1733161404877668975	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_3bit_256_64_kernel.o	21bce4566f890a12
+8815	18796	1733161414267982799	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_3bit_64_256_with_zero_kernel.o	5b74ea989ce971f5
+9366	20786	1733161416296098752	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_3bit_cuda_kernel.o	65cf304fe723802d
+18818	28279	1733161423752450169	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_3bit_cuda_kernel_faster.o	2768508e1c40c4ed
+20786	30231	1733161425742194550	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_3bit_with_zero_cuda_kernel.o	302a2494f7e157e
+30231	37324	1733161432836111678	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_cuda_kernel.o	caf98552ccf2f315
+28301	120149	1733161515639375825	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_cuda.o	a9530a620e18883
+12	825665	1733176304076075026	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/dequant_GEMM.o	511388cc93ae2e3d
+13	867609	1733176346020791629	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/dequant_GEMM_kernel.o	95f710502a088f17
+12	46041	1733176448522726954	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/milo_3bit_cutlass_kernel.o	9dea31cedd26a6a6
+189	61504	1733177329053981114	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/milo_3bit_cutlass_kernel.o	e8e911a159660654
+107396	234468	1733704478434282389	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_cuda.o	a9530a620e18883
+118	27825	1733704653740932684	/u/zshao3/int3marlin/marlin/build/temp.linux-x86_64-cpython-38/marlin/marlin_cuda.o	a9530a620e18883
