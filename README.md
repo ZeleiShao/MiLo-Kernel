@@ -1,3 +1,3 @@
-# int3marlin
+# MiLo
 
-We will implement a int3-version marlin.
+We implement a W3A16 GeMM based on marlin.
